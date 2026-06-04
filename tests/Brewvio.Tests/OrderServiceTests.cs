@@ -15,6 +15,15 @@ public class OrderServiceTests
         return (new OrderService(t.Db, cur, audit, new SettingsService(t.Db, audit)), t.Db);
     }
 
+    // Builds an OrderService over a specific context (used to simulate two concurrent requests,
+    // each with its own DbContext, mirroring two Lambda instances hitting the same inventory).
+    private static OrderService BuildOn(BrewvioDbContext db, int cashierId)
+    {
+        var cur = TestSupport.Cur(cashierId, "cashier", "Cashier");
+        var audit = new AuditService(db, cur);
+        return new OrderService(db, cur, audit, new SettingsService(db, audit));
+    }
+
     private static List<CartItemInput> Cart(int menuItemId, int qty) =>
         new() { new CartItemInput(menuItemId, qty, new List<int>(), null) };
 
@@ -112,5 +121,36 @@ public class OrderServiceTests
         Assert.NotNull(refunded);
         Assert.Equal("Refunded", refunded!.Status);
         Assert.Equal(afterSale + 200m, Stock("Whole Milk"));
+    }
+
+    [Fact]
+    public async Task Concurrent_orders_on_same_ingredient_do_not_lose_a_deduction()
+    {
+        using var t = new TestDb();
+        await DatabaseInitializer.SeedAllAsync(t.Db);
+        var cashierId = t.Db.Users.First(u => u.Username == "cashier").Id;
+        var latte = t.Db.MenuItems.First(m => m.Name == "Caffe Latte"); // recipe: Whole Milk 200ml
+        decimal Stock(string n) { using var v = t.NewContext(); return v.Ingredients.First(i => i.Name == n).StockLevel; }
+        var milk0 = Stock("Whole Milk");
+
+        // Two independent contexts read the same starting stock, then both commit a sale. Without
+        // the xmin concurrency token one write would silently clobber the other (lost update);
+        // with it, the second SaveChanges conflicts, reloads, and re-applies — so both deductions land.
+        using var ctxA = t.NewContext();
+        using var ctxB = t.NewContext();
+        var svcA = BuildOn(ctxA, cashierId);
+        var svcB = BuildOn(ctxB, cashierId);
+
+        var ingA = ctxA.Ingredients.First(i => i.Name == "Whole Milk");
+        var ingB = ctxB.Ingredients.First(i => i.Name == "Whole Milk");  // both load before either saves
+        Assert.Equal(ingA.StockLevel, ingB.StockLevel);
+
+        await svcA.CreateAsync(new CreateOrderRequest(Cart(latte.Id, 1), 0m, new List<PaymentInput> { new("Cash", 200m) }));
+        await svcB.CreateAsync(new CreateOrderRequest(Cart(latte.Id, 1), 0m, new List<PaymentInput> { new("Cash", 200m) }));
+
+        // Both 200ml deductions must be reflected — total 400ml off, not 200ml.
+        Assert.Equal(milk0 - 400m, Stock("Whole Milk"));
+        using var verify = t.NewContext();
+        Assert.Equal(2, await verify.Transactions.CountAsync());
     }
 }

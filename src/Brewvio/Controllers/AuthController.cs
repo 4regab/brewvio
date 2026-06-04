@@ -11,9 +11,10 @@ namespace Brewvio.Controllers;
 public class AuthController(AuthService auth) : ControllerBase
 {
     // Lightweight fixed-window rate limiter for the anonymous endpoints (register + status poll),
-    // keyed by client IP. Prevents sign-up spam / account-enumeration hammering. For a single
-    // Lambda this lives per-instance; a production deployment would use API Gateway throttling
-    // or a shared store (see api-contract.md → "Security notes").
+    // keyed by client IP. Defense-in-depth only: it lives per-Lambda-instance, so the authoritative
+    // throttle is the API Gateway HTTP API stage limit (DefaultRouteSettings in template.yaml),
+    // which applies globally across all instances. This local check still trims obvious abuse
+    // bursts within a single warm instance before they reach the service/DB.
     private static readonly ConcurrentDictionary<string, (int Count, DateTime Window)> _hits = new();
     private const int RegisterLimit = 5;                       // max sign-ups per window per IP
     private static readonly TimeSpan Window = TimeSpan.FromMinutes(10);

@@ -23,28 +23,7 @@ public class OrderService(BrewvioDbContext db, CurrentUser current, AuditService
 
         var lineItems = new List<TransactionItem>();
         var usage = new Dictionary<int, decimal>();      // ingredientId -> quantity to deduct
-        decimal subtotal = 0;
-
-        foreach (var ci in req.Items)
-        {
-            if (ci.Quantity <= 0) throw new ArgumentException("Quantity must be positive.");
-            if (!menuItems.TryGetValue(ci.MenuItemId, out var mi) || !mi.IsActive)
-                throw new ArgumentException($"Menu item {ci.MenuItemId} is unavailable.");
-
-            var chosen = (ci.ModifierIds ?? Array.Empty<int>()).Where(mods.ContainsKey).Select(id => mods[id]).ToList();
-            var unitPrice = mi.Price + chosen.Sum(m => m.PriceDelta);
-            var lineTotal = unitPrice * ci.Quantity;
-            subtotal += lineTotal;
-
-            lineItems.Add(new TransactionItem
-            {
-                MenuItemId = mi.Id, ItemName = mi.Name, UnitPrice = unitPrice,
-                Quantity = ci.Quantity, LineTotal = lineTotal,
-                Modifiers = chosen.Count == 0 ? null : string.Join(", ", chosen.Select(m => m.Name))
-            });
-            foreach (var ri in mi.Recipe)
-                usage[ri.IngredientId] = usage.GetValueOrDefault(ri.IngredientId) + ri.Quantity * ci.Quantity;
-        }
+        var subtotal = BuildLineItems(req.Items, menuItems, mods, lineItems, usage);
 
         subtotal = Math.Round(subtotal, 2);
         var discount = Math.Clamp(Math.Round(req.DiscountAmount, 2), 0, subtotal);
@@ -65,21 +44,12 @@ public class OrderService(BrewvioDbContext db, CurrentUser current, AuditService
         var payRows = new List<Payment>();
         if (cardTotal > 0) payRows.Add(new Payment { Method = "Card", Amount = cardTotal });
         if (cashApplied > 0 || payRows.Count == 0) payRows.Add(new Payment { Method = "Cash", Amount = cashApplied });
-        var method = cardTotal > 0 && cashApplied > 0 ? "Split" : cardTotal > 0 ? "Card" : "Cash";
+        var method = PaymentMethodLabel(cardTotal, cashApplied);
 
         // Deduct recipe ingredients and collect low/negative-stock warnings.
-        var warnings = new List<string>();
-        if (usage.Count > 0)
-        {
-            var ings = await db.Ingredients.Where(i => usage.Keys.Contains(i.Id)).ToListAsync();
-            foreach (var ing in ings)
-            {
-                ing.StockLevel -= usage[ing.Id];
-                if (ing.StockLevel < 0) warnings.Add($"{ing.Name} is now negative ({ing.StockLevel} {ing.Unit}).");
-                else if (ing.StockLevel <= ing.Threshold) warnings.Add($"{ing.Name} is low ({ing.StockLevel} {ing.Unit}).");
-            }
-        }
-
+        // The actual deduction + persistence happens in PersistWithStockAsync, which re-applies the
+        // deductions against fresh values and retries if a concurrent order changed stock first
+        // (optimistic concurrency via the Ingredient xmin token) — preventing oversell.
         var shiftId = (await db.Shifts.FirstOrDefaultAsync(s => s.CashierId == current.Id && s.Status == "Open"))?.Id;
         var tx = new Transaction
         {
@@ -90,9 +60,55 @@ public class OrderService(BrewvioDbContext db, CurrentUser current, AuditService
         };
         db.Transactions.Add(tx);
         audit.Add("OrderCompleted", $"Txn total {total:0.00} via {method}; {lineItems.Count} line(s).");
-        await db.SaveChangesAsync();
+
+        var warnings = await PersistWithStockAsync(usage);
 
         return ToReceipt(tx, current.Username, tendered, change, warnings);
+    }
+
+    // Applies ingredient deductions and commits the order, retrying on optimistic-concurrency
+    // conflicts. Each attempt re-reads the conflicting ingredients' current stock and re-applies the
+    // deduction on top of it, so two concurrent orders can never overwrite each other's deduction.
+    // Returns the low/negative-stock warnings computed from the committed stock levels.
+    private async Task<List<string>> PersistWithStockAsync(Dictionary<int, decimal> usage)
+    {
+        const int maxAttempts = 5;
+        for (var attempt = 1; attempt <= maxAttempts; attempt++)
+        {
+            var warnings = new List<string>();
+            List<Ingredient> ings = usage.Count > 0
+                ? await db.Ingredients.Where(i => usage.Keys.Contains(i.Id)).ToListAsync()
+                : new List<Ingredient>();
+            foreach (var ing in ings)
+            {
+                ing.StockLevel -= usage[ing.Id];
+                if (ing.StockLevel < 0) warnings.Add($"{ing.Name} is now negative ({ing.StockLevel} {ing.Unit}).");
+                else if (ing.StockLevel <= ing.Threshold) warnings.Add($"{ing.Name} is low ({ing.StockLevel} {ing.Unit}).");
+            }
+
+            try
+            {
+                await db.SaveChangesAsync();
+                return warnings;
+            }
+            catch (DbUpdateConcurrencyException ex) when (attempt < maxAttempts)
+            {
+                // A concurrent write changed one of these ingredients. Refresh the conflicting
+                // entries to the latest DB values (and current xmin) and loop to re-apply.
+                foreach (var entry in ex.Entries)
+                {
+                    var dbValues = await entry.GetDatabaseValuesAsync();
+                    if (dbValues is null) continue;            // deleted concurrently — skip re-apply
+                    entry.OriginalValues.SetValues(dbValues);
+                    entry.CurrentValues.SetValues(dbValues);
+                    entry.State = EntityState.Unchanged;
+                }
+            }
+        }
+
+        // Exhausted retries under sustained contention — surface as a domain error (-> HTTP 400/500).
+        throw new InvalidOperationException(
+            "The order could not be completed due to high inventory contention. Please try again.");
     }
 
     public async Task<ReceiptDto?> RefundAsync(int id, string reason)
@@ -134,8 +150,55 @@ public class OrderService(BrewvioDbContext db, CurrentUser current, AuditService
         var tx = await db.Transactions.Include(t => t.Items).Include(t => t.Payments).Include(t => t.Cashier)
             .FirstOrDefaultAsync(t => t.Id == id);
         if (tx is null) return null;
-        var name = tx.Cashier is null ? "" : tx.Cashier.FullName != "" ? tx.Cashier.FullName : tx.Cashier.Username;
+        var name = CashierDisplayName(tx.Cashier);
         return ToReceipt(tx, name, tx.TotalAmount, 0, new List<string>());
+    }
+
+    // Validates each cart item, builds its TransactionItem line, accumulates ingredient usage,
+    // and returns the running subtotal. Extracted from CreateAsync to keep that method simple.
+    private static decimal BuildLineItems(
+        IReadOnlyList<CartItemInput> items,
+        IReadOnlyDictionary<int, MenuItem> menuItems,
+        IReadOnlyDictionary<int, Modifier> mods,
+        List<TransactionItem> lineItems,
+        Dictionary<int, decimal> usage)
+    {
+        decimal subtotal = 0;
+        foreach (var ci in items)
+        {
+            if (ci.Quantity <= 0) throw new ArgumentException("Quantity must be positive.");
+            if (!menuItems.TryGetValue(ci.MenuItemId, out var mi) || !mi.IsActive)
+                throw new ArgumentException($"Menu item {ci.MenuItemId} is unavailable.");
+
+            var chosen = (ci.ModifierIds ?? Array.Empty<int>()).Where(mods.ContainsKey).Select(id => mods[id]).ToList();
+            var unitPrice = mi.Price + chosen.Sum(m => m.PriceDelta);
+            var lineTotal = unitPrice * ci.Quantity;
+            subtotal += lineTotal;
+
+            lineItems.Add(new TransactionItem
+            {
+                MenuItemId = mi.Id, ItemName = mi.Name, UnitPrice = unitPrice,
+                Quantity = ci.Quantity, LineTotal = lineTotal,
+                Modifiers = chosen.Count == 0 ? null : string.Join(", ", chosen.Select(m => m.Name))
+            });
+            foreach (var ri in mi.Recipe)
+                usage[ri.IngredientId] = usage.GetValueOrDefault(ri.IngredientId) + ri.Quantity * ci.Quantity;
+        }
+        return subtotal;
+    }
+
+    // "Split" when both tenders are present, otherwise the single method used.
+    private static string PaymentMethodLabel(decimal cardTotal, decimal cashApplied)
+    {
+        if (cardTotal > 0 && cashApplied > 0) return "Split";
+        return cardTotal > 0 ? "Card" : "Cash";
+    }
+
+    // Prefers full name, falls back to username, empty when no cashier is attached.
+    private static string CashierDisplayName(User? cashier)
+    {
+        if (cashier is null) return "";
+        return cashier.FullName != "" ? cashier.FullName : cashier.Username;
     }
 
     private static ReceiptDto ToReceipt(Transaction tx, string cashier, decimal tendered, decimal change, List<string> warnings) =>

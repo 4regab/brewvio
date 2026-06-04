@@ -6,14 +6,13 @@ Description: >
   Database is Supabase Postgres (reached over SSL via the DATABASE_URL).
 
 Parameters:
-  DatabaseUrl:
+  SsmParameterPath:
     Type: String
-    NoEcho: true
-    Description: Supabase Supavisor transaction-pooler URL (postgres://user:pass@host:6543/postgres)
-  JwtKey:
-    Type: String
-    NoEcho: true
-    Description: Secret key (>= 32 bytes) used to sign API JWTs
+    Default: /brewvio
+    Description: >
+      SSM Parameter Store path prefix holding the app secrets. Create
+      <path>/DATABASE_URL and <path>/JWT_KEY as SecureString parameters
+      out-of-band (CloudFormation cannot create SecureString parameters).
 
 Globals:
   Function:
@@ -25,16 +24,49 @@ Globals:
 Resources:
   Api:
     Type: AWS::Serverless::HttpApi
+    Properties:
+      # Stage-level throttling is global (unlike the per-instance in-memory limiter the app used
+      # to rely on for /api/auth/*). Caps burst + sustained request rate across all Lambda
+      # instances, mitigating sign-up spam and credential-stuffing at the edge.
+      DefaultRouteSettings:
+        ThrottlingBurstLimit: 50
+        ThrottlingRateLimit: 100
 
   BrewvioFunction:
     Type: AWS::Serverless::Function
     Properties:
+      FunctionName: !Sub '${AWS::StackName}-api'
       CodeUri: src/Brewvio/
       Handler: Brewvio        # assembly name — AddAWSLambdaHosting bootstraps the app
       Environment:
         Variables:
-          DATABASE_URL: !Ref DatabaseUrl
-          JWT_KEY: !Ref JwtKey
+          # Secrets themselves are pulled from SSM Parameter Store at startup, not stored here.
+          SSM_PARAMETER_PATH: !Ref SsmParameterPath
+      Policies:
+        # Least-privilege: read only this app's parameters + decrypt SecureString values.
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - ssm:GetParametersByPath
+                - ssm:GetParameters
+                - ssm:GetParameter
+              Resource:
+                # GetParametersByPath authorizes against the path resource itself
+                # (parameter/brewvio), while GetParameter(s) authorize against each child
+                # (parameter/brewvio/*). Grant both so path-based loading works.
+                - !Sub 'arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter${SsmParameterPath}'
+                - !Sub 'arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter${SsmParameterPath}/*'
+            - Effect: Allow
+              Action: kms:Decrypt
+              # SecureString decryption. IAM authorizes KMS against the key ARN, so an
+              # alias ARN can't be used here. Scope to the SSM service via condition so
+              # this role can only decrypt when SSM is the caller. If you switch to a
+              # customer-managed key, you can instead pin Resource to that key's ARN.
+              Resource: '*'
+              Condition:
+                StringEquals:
+                  kms:ViaService: !Sub 'ssm.${AWS::Region}.amazonaws.com'
       Events:
         Root:
           Type: HttpApi
@@ -49,6 +81,15 @@ Resources:
             Path: "/{proxy+}"
             Method: ANY
 
+  # Explicit log group so retention is bounded (30 days) instead of Lambda's implicit never-expire
+  # group. Caps CloudWatch storage cost and is created/deleted with the stack. The name must match
+  # the function's auto log group: /aws/lambda/<FunctionName>.
+  BrewvioFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${AWS::StackName}-api'
+      RetentionInDays: 30
+
   FrontendBucket:
     Type: AWS::S3::Bucket
     Properties:
@@ -57,6 +98,18 @@ Resources:
         BlockPublicPolicy: true
         IgnorePublicAcls: true
         RestrictPublicBuckets: true
+      # Versioning lets a bad SPA deploy be rolled back; the lifecycle rule expires old versions
+      # after 30 days so retained history doesn't accumulate storage cost indefinitely.
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: expire-noncurrent-versions
+            Status: Enabled
+            NoncurrentVersionExpiration:
+              NoncurrentDays: 30
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 7
 
   FrontendOac:
     Type: AWS::CloudFront::OriginAccessControl

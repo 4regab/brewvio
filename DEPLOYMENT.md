@@ -31,9 +31,29 @@ and deploying to AWS (Lambda + S3 + CloudFront) with AWS SAM.
 
 | Name | Purpose |
 |------|---------|
-| `DatabaseUrl` (SAM param) | Supabase **transaction pooler** URI, port `6543` |
-| `JwtKey` (SAM param) | Production JWT signing key (≥ 32 bytes) |
+| `SsmParameterPath` (SAM param) | SSM path prefix for secrets (default `/brewvio`) |
 | `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` / `AWS_REGION` | Standard AWS credentials for `sam deploy` |
+
+On Lambda the app reads secrets from **SSM Parameter Store** (not env vars). Create these
+`SecureString` parameters under the path before/after deploying — CloudFormation cannot create
+`SecureString` parameters itself, so they live out-of-band:
+
+| SSM parameter | Maps to config key | Purpose |
+|---------------|--------------------|---------|
+| `/brewvio/DATABASE_URL` | `DATABASE_URL` | Supabase **transaction pooler** URI, port `6543` |
+| `/brewvio/JWT_KEY` | `JWT_KEY` | Production JWT signing key (≥ 32 bytes) |
+
+```bash
+aws ssm put-parameter --name /brewvio/DATABASE_URL --type SecureString \
+  --value 'postgres://postgres:<pass>@db.<ref>.supabase.co:6543/postgres'
+aws ssm put-parameter --name /brewvio/JWT_KEY --type SecureString \
+  --value '<production-signing-key-min-32-bytes>'
+```
+
+> The Lambda's IAM role is granted least-privilege `ssm:GetParametersByPath`/`GetParameter`
+> on `/brewvio/*` plus `kms:Decrypt` scoped to the SSM service (`kms:ViaService`). The app
+> loads the path at startup via `AddSystemsManager`. Locally, the same keys are read from
+> env vars (`DATABASE_URL`, `JWT_KEY`) so no AWS calls happen in development.
 
 ---
 
@@ -132,12 +152,23 @@ function's `Handler: Brewvio` is the assembly name — the hosting package boots
 
 ### Build & deploy the API
 
+First create the secrets in SSM Parameter Store (one time, see the SSM table in §1):
+
+```bash
+aws ssm put-parameter --name /brewvio/DATABASE_URL --type SecureString \
+  --value 'postgres://postgres:<pass>@db.<ref>.supabase.co:6543/postgres'
+aws ssm put-parameter --name /brewvio/JWT_KEY --type SecureString \
+  --value '<production-signing-key-min-32-bytes>'
+```
+
+Then build and deploy. Secrets are no longer passed on the command line — the Lambda
+reads them from SSM at startup:
+
 ```bash
 sam build
-sam deploy --guided \
-  --parameter-overrides \
-    DatabaseUrl='postgres://postgres:<pass>@db.<ref>.supabase.co:6543/postgres' \
-    JwtKey='<production-signing-key-min-32-bytes>'
+sam deploy --guided
+# Optional: override the SSM path prefix (default /brewvio)
+#   --parameter-overrides SsmParameterPath=/brewvio
 ```
 
 `sam deploy` outputs:
@@ -174,6 +205,30 @@ The project is also `dotnet lambda`-compatible (`AWSProjectType=Lambda`):
 ```bash
 dotnet lambda deploy-function --project-location src/Brewvio
 ```
+
+### Backup & disaster recovery
+
+Supabase provides its own managed backups (cadence and point-in-time recovery depend on your
+Supabase plan — confirm what your tier includes and document it alongside your RPO/RTO targets).
+For an **independent** copy you control, `scripts/backup-db.sh` takes a compressed `pg_dump` and
+uploads it to S3 with a timestamped key, pruning copies older than `RETENTION_DAYS` (default 30):
+
+```bash
+DATABASE_URL='postgres://postgres:<pass>@db.<ref>.supabase.co:5432/postgres' \
+BACKUP_BUCKET='my-brewvio-backups' \
+  bash scripts/backup-db.sh
+```
+
+> Use the **session-mode** pooler (port `5432`) for `pg_dump`, not the transaction pooler (`6543`).
+> Run it on a schedule (cron, a GitHub Actions scheduled workflow, or an EventBridge-triggered
+> runner). Restore with `gunzip -c brewvio-<stamp>.sql.gz | psql "$DATABASE_URL"`.
+
+**Recommended targets to document for the team:**
+
+| Objective | Suggested target | Basis |
+|-----------|------------------|-------|
+| RPO (max data loss) | ≤ 24h | Daily `backup-db.sh` + Supabase PITR if on a paid tier |
+| RTO (max downtime) | ≤ 1h | Redeploy stack + restore latest dump |
 
 ---
 

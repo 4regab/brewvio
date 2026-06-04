@@ -17,11 +17,23 @@ builder.Configuration.AddJsonFile(
     $"appsettings.{builder.Environment.EnvironmentName}.local.json",
     optional: true, reloadOnChange: true);
 
-// DATABASE_URL is the Supabase pooler URL (postgres://user:pass@host:port/db).
+// On Lambda, load secrets (DATABASE_URL, JWT_KEY) from SSM Parameter Store under the
+// /brewvio path instead of plaintext Lambda env vars. SecureString params are decrypted
+// via KMS using the function's role. Path-based loading maps /brewvio/DATABASE_URL ->
+// config key "DATABASE_URL" and /brewvio/JWT_KEY -> "JWT_KEY". Added last, so it takes
+// precedence over any env vars. Required (optional:false) so misconfiguration fails fast.
+if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("AWS_LAMBDA_FUNCTION_NAME")))
+{
+    var ssmPath = Environment.GetEnvironmentVariable("SSM_PARAMETER_PATH") ?? "/brewvio";
+    builder.Configuration.AddSystemsManager(ssmPath, optional: false);
+}
+
+// DATABASE_URL is the Supabase pooler URL (postgres://user:pass@host:port/db). Read via
+// configuration so it resolves from an env var locally or from SSM on Lambda.
 // Build the Npgsql string safely (passwords are URL-encoded); SSL is required and
 // prepared statements stay off (Max Auto Prepare=0 default) for the transaction pooler.
 var connectionString = builder.Configuration.GetConnectionString("Default");
-var databaseUrl = Environment.GetEnvironmentVariable("DATABASE_URL");
+var databaseUrl = builder.Configuration["DATABASE_URL"];
 if (!string.IsNullOrEmpty(databaseUrl))
 {
     var uri = new Uri(databaseUrl);
@@ -45,10 +57,19 @@ if (!string.IsNullOrEmpty(databaseUrl))
 
 builder.Services.AddControllers();
 builder.Services.AddDbContext<BrewvioDbContext>(options =>
-    options.UseNpgsql(connectionString));
+    // EnableRetryOnFailure: transparently retries transient pooler/network errors (Supavisor can
+    // drop connections) instead of surfacing them as 500s. Multi-step writes use the provider's
+    // execution strategy (see OrderService) so they compose with the retry policy.
+    options.UseNpgsql(connectionString, npgsql =>
+        npgsql.EnableRetryOnFailure(
+            maxRetryCount: 3,
+            maxRetryDelay: TimeSpan.FromSeconds(5),
+            errorCodesToAdd: null)));
 
 // JWT auth: the app issues and validates its own HMAC-signed tokens (role claim = "role").
-var jwtKey = Environment.GetEnvironmentVariable("JWT_KEY") ?? builder.Configuration["Jwt:Key"]
+// Read via configuration so the key resolves from JWT_KEY (env var locally / SSM on Lambda)
+// or Jwt:Key (local dev appsettings). The app throws on startup if none is configured.
+var jwtKey = builder.Configuration["JWT_KEY"] ?? builder.Configuration["Jwt:Key"]
     ?? throw new InvalidOperationException(
         "JWT signing key not configured. Set the JWT_KEY environment variable (or Jwt:Key for local dev).");
 // Application services (Controllers -> Services -> Data) + current-user accessor for auditing.
@@ -86,14 +107,45 @@ builder.Services.AddAWSLambdaHosting(LambdaEventSource.HttpApi);
 
 var app = builder.Build();
 
-// Translate domain validation errors (thrown by services) into clean 400 responses.
+// Correlation id + structured request logging. Every request gets a trace id (reusing an
+// inbound X-Correlation-Id / X-Amzn-Trace-Id when present) that flows into a logging scope, the
+// response header, and any error payload — so a single id ties together all logs for a request.
 app.Use(async (ctx, next) =>
 {
-    try { await next(); }
+    var logger = ctx.RequestServices.GetRequiredService<ILoggerFactory>().CreateLogger("Brewvio.Request");
+    var correlationId = ctx.Request.Headers["X-Correlation-Id"].FirstOrDefault()
+        ?? ctx.Request.Headers["X-Amzn-Trace-Id"].FirstOrDefault()
+        ?? Guid.NewGuid().ToString("N");
+    ctx.Response.Headers["X-Correlation-Id"] = correlationId;
+
+    using var scope = logger.BeginScope(new Dictionary<string, object>
+    {
+        ["CorrelationId"] = correlationId,
+        ["Method"] = ctx.Request.Method,
+        ["Path"] = ctx.Request.Path.Value ?? "",
+    });
+    var startedAt = DateTime.UtcNow;
+    try
+    {
+        await next();
+        var elapsedMs = (DateTime.UtcNow - startedAt).TotalMilliseconds;
+        logger.LogInformation("{Method} {Path} responded {StatusCode} in {ElapsedMs:0}ms",
+            ctx.Request.Method, ctx.Request.Path.Value, ctx.Response.StatusCode, elapsedMs);
+    }
     catch (Exception ex) when (ex is ArgumentException or InvalidOperationException)
     {
+        // Expected domain validation errors -> clean 400, logged at Warning (not an outage signal).
+        logger.LogWarning(ex, "Validation error on {Method} {Path}", ctx.Request.Method, ctx.Request.Path.Value);
         ctx.Response.StatusCode = StatusCodes.Status400BadRequest;
-        await ctx.Response.WriteAsJsonAsync(new { message = ex.Message });
+        await ctx.Response.WriteAsJsonAsync(new { message = ex.Message, correlationId });
+    }
+    catch (Exception ex)
+    {
+        // Unexpected errors -> 500, logged at Error so they trip CloudWatch error alarms; the
+        // correlation id is returned so a user can quote it without leaking internals.
+        logger.LogError(ex, "Unhandled error on {Method} {Path}", ctx.Request.Method, ctx.Request.Path.Value);
+        ctx.Response.StatusCode = StatusCodes.Status500InternalServerError;
+        await ctx.Response.WriteAsJsonAsync(new { message = "An unexpected error occurred.", correlationId });
     }
 });
 
@@ -110,4 +162,4 @@ if (string.IsNullOrEmpty(Environment.GetEnvironmentVariable("AWS_LAMBDA_FUNCTION
     await DatabaseInitializer.SeedAsync(app);
 }
 
-app.Run();
+await app.RunAsync();

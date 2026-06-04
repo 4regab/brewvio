@@ -31,6 +31,14 @@ public class AuthService(BrewvioDbContext db, IConfiguration config, AuditServic
         if (!user.IsActive || user.Status != UserStatus.Active)
             return new LoginOutcome(null, "Your account is inactive. Please contact your manager.");
 
+        // Transparent upgrade: if the stored hash used an older (weaker) parameter set, re-hash the
+        // password with the current iteration count now that we have the plaintext and it verified.
+        if (PasswordHasher.NeedsRehash(user.PasswordHash))
+        {
+            user.PasswordHash = PasswordHasher.Hash(password);
+            await db.SaveChangesAsync();
+        }
+
         var token = IssueToken(user);
         await audit.LogAsync("Login", $"{user.Username} ({user.Role}) signed in.");
         return new LoginOutcome(new LoginResponse(token, user.Username, user.FullName, user.Role), null);
@@ -41,8 +49,8 @@ public class AuthService(BrewvioDbContext db, IConfiguration config, AuditServic
     {
         if (string.IsNullOrWhiteSpace(req.Username) || string.IsNullOrWhiteSpace(req.Password))
             throw new ArgumentException("Username and password are required.");
-        if (req.Password.Length < 6)
-            throw new ArgumentException("Password must be at least 6 characters.");
+        if (req.Password.Length < 8)
+            throw new ArgumentException("Password must be at least 8 characters.");
         if (await db.Users.AnyAsync(u => u.Username == req.Username))
             throw new InvalidOperationException("That username is already taken.");
 
@@ -72,7 +80,12 @@ public class AuthService(BrewvioDbContext db, IConfiguration config, AuditServic
 
     private string IssueToken(User user)
     {
-        var key = Environment.GetEnvironmentVariable("JWT_KEY") ?? config["Jwt:Key"]!;
+        // Resolve the signing key the same way Program.cs resolves it for token *validation*:
+        // JWT_KEY from configuration (env var locally / SSM Parameter Store on Lambda), falling
+        // back to Jwt:Key for local dev. Issuance and validation MUST use the same key, so this
+        // must stay in sync with Program.cs (do not read the env var directly — it's unset on Lambda).
+        var key = config["JWT_KEY"] ?? config["Jwt:Key"]
+            ?? throw new InvalidOperationException("JWT signing key not configured.");
         var creds = new SigningCredentials(
             new SymmetricSecurityKey(Encoding.UTF8.GetBytes(key)), SecurityAlgorithms.HmacSha256);
 

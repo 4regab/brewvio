@@ -55,10 +55,16 @@ public class InventoryService(BrewvioDbContext db, AuditService audit)
 
     private static IngredientDto ToDto(Ingredient i)
     {
-        var status = i.StockLevel <= 0 ? "Out of Stock"
-            : i.StockLevel <= i.Threshold ? "Low Stock" : "In Stock";
         return new IngredientDto(i.Id, i.Code, i.Name, i.Category, i.Unit, i.StockLevel, i.Threshold,
-            i.CostPerUnit, i.StockLevel <= i.Threshold, status);
+            i.CostPerUnit, i.StockLevel <= i.Threshold, StockStatus(i.StockLevel, i.Threshold));
+    }
+
+    // Derives the human-readable stock status from the current level vs the low-stock threshold.
+    private static string StockStatus(decimal stockLevel, decimal threshold)
+    {
+        if (stockLevel <= 0) return "Out of Stock";
+        if (stockLevel <= threshold) return "Low Stock";
+        return "In Stock";
     }
     private static List<IngredientDto> ToDtos(IEnumerable<Ingredient> items) => items.Select(ToDto).ToList();
 }

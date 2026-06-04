@@ -28,6 +28,14 @@ public class BrewvioDbContext(DbContextOptions<BrewvioDbContext> options) : DbCo
             e.Property(x => x.StockLevel).HasPrecision(12, 3);
             e.Property(x => x.Threshold).HasPrecision(12, 3);
             e.Property(x => x.CostPerUnit).HasPrecision(12, 4);
+            // Optimistic concurrency on the PostgreSQL system column `xmin` so concurrent stock
+            // deductions can't silently overwrite each other (lost update / oversell). A conflicting
+            // SaveChanges throws DbUpdateConcurrencyException, which OrderService reloads and retries.
+            // UseXminAsConcurrencyToken is the idiomatic Npgsql 8 mapping (it tracks the existing
+            // system column without adding one); the obsolete hint points at a future EF direction.
+#pragma warning disable CS0618
+            e.UseXminAsConcurrencyToken();
+#pragma warning restore CS0618
         });
         b.Entity<MenuItem>().Property(x => x.Price).HasPrecision(12, 2);
         b.Entity<Modifier>().Property(x => x.PriceDelta).HasPrecision(12, 2);

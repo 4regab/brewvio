@@ -86,7 +86,6 @@ public class ReportingService(BrewvioDbContext db)
         {
             case "weekly":
                 // ISO week (Mon-anchored) -> "yyyy-Www".
-                var cal = CultureInfo.InvariantCulture.Calendar;
                 var week = ISOWeek.GetWeekOfYear(d);
                 var year = ISOWeek.GetYear(d);
                 return ($"{year}-W{week:00}", $"{year}{week:00}");

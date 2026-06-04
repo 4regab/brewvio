@@ -4,7 +4,8 @@ obj/
 [Dd]ebug/
 [Rr]elease/
 .aws-sam/
-
+.agents*
+scripts*
 # IDE
 .vs/
 .vscode/
