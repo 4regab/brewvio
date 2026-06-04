@@ -146,6 +146,8 @@ Before the first deploy, create the two SSM parameters (see §1). After that, re
 
 ### Deploy the API
 
+Run from the **project root** (where `template.yaml` lives), not from `src/`:
+
 ```bash
 dotnet lambda deploy-serverless \
   --template template.yaml \
