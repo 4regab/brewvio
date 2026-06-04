@@ -35,38 +35,8 @@ keeps a classic layered, OOP design (`Controllers → Services → Data`) and ta
 CloudFront distribution fronts both origins, so the frontend and `/api/*` share one domain
 (no CORS).
 
-```mermaid
-flowchart TD
-    User([Cashier / Manager<br/>Browser])
+<img width="1195" height="801" alt="image" src="https://github.com/user-attachments/assets/0da1af68-3afd-429e-9cc9-8acc9b5b191c" />
 
-    subgraph AWS["AWS Cloud"]
-        CF{{"Amazon CloudFront<br/>single domain · HTTPS"}}
-        subgraph Static["Static Frontend"]
-            S3[("Amazon S3<br/>HTML / CSS / JS<br/>private + OAC")]
-        end
-        subgraph Backend["C# Backend — serverless"]
-            APIGW["API Gateway<br/>HTTP API + JWT"]
-            Lambda["AWS Lambda<br/>ASP.NET Core 8 Web API<br/>Controllers → Services → EF Core"]
-            APIGW --> Lambda
-        end
-    end
-
-    subgraph Supabase["Supabase — managed PostgreSQL"]
-        Pool["Supavisor pooler<br/>transaction mode :6543"]
-        PG[("PostgreSQL<br/>transactions, menu,<br/>recipes, inventory, users")]
-        Pool --> PG
-    end
-
-    User -->|HTTPS| CF
-    CF -->|default behavior| S3
-    CF -->|/api/*| APIGW
-    Lambda -->|SSL connection string| Pool
-
-    classDef aws fill:#FF9900,stroke:#CC7A00,color:#000;
-    classDef db fill:#3ECF8E,stroke:#1A7F5A,color:#053;
-    class CF,S3,APIGW,Lambda aws;
-    class Pool,PG db;
-```
 
 ## Project Structure
 
