@@ -33,7 +33,7 @@ Resources:
     Properties:
       FunctionName:
         Fn::Sub: ${AWS::StackName}-api
-      CodeUri: Brewvio
+      CodeUri: src
       Handler: Brewvio
       Environment:
         Variables:

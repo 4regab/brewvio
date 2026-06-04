@@ -60,12 +60,12 @@ Brewvio/
 ├── Helpers/                   CurrentUser, PasswordHasher, ExportHelper
 └── wwwroot/                   Static frontend (HTML/CSS/JS) deployed to S3 + CloudFront
 
-Brewvio.Tests/                 xUnit service tests (Auth, User, Inventory, Order, Reporting, Shift)
+tests/Brewvio.Tests/           xUnit service tests (Auth, User, Inventory, Order, Reporting, Shift)
 ```
 
 The API runs in Lambda via `Amazon.Lambda.AspNetCoreServer.Hosting`; the static frontend in
 `wwwroot/` is uploaded to S3 and served through CloudFront. Backend tests live in
-`Brewvio.Tests/` (xUnit against a real PostgreSQL, run with `dotnet test`).
+Backend tests live in `tests/Brewvio.Tests/` (xUnit against a real PostgreSQL, run with `dotnet test`).
 
 ## Getting Started
 
