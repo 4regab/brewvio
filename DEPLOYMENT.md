@@ -61,20 +61,17 @@ aws ssm put-parameter --name /brewvio/JWT_KEY --type SecureString \
 
 ### 2a. Start PostgreSQL (port 5433)
 
-This repo includes a no-sudo helper that initialises and starts a user-owned Postgres 18 cluster
-on port `5433` with a `postgres`/`postgres` superuser:
-
-```bash
-bash scripts/pg-setup.sh     # initialise + start the cluster (idempotent)
-bash scripts/pg-initdb.sh    # create the 'brewvio' database
-```
-
-Alternatively, with Docker:
+The app and tests expect a PostgreSQL server on port `5433` with a `postgres`/`postgres`
+superuser. The quickest way is Docker:
 
 ```bash
 docker run -d --name brewvio-pg -p 5433:5432 \
   -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=brewvio postgres:16
 ```
+
+Any existing local Postgres works too — just point `ConnectionStrings__Default` /
+`BREWVIO_TEST_PG` at it (see §1). The default connection string in `appsettings.json` is
+`Host=localhost;Port=5433;Database=brewvio;Username=postgres;Password=postgres`.
 
 ### 2b. Apply EF Core migrations
 
@@ -83,19 +80,22 @@ docker run -d --name brewvio-pg -p 5433:5432 \
 dotnet ef database update --project src/Brewvio
 ```
 
-(The included `scripts/ef-update.sh` does this against `:5433`.)
+This includes the `EnableRowLevelSecurity` migration (see §5). It is written to be a safe
+no-op on a plain local Postgres — the policies and grants it manages target Supabase-only
+roles (`authenticated`/`anon`), so on `:5433` (where those roles don't exist) RLS is enabled
+but the role-specific statements are skipped.
 
 ### 2c. Run the API + SPA
 
 ```bash
-# Windows
-scripts\run-api.cmd
-# or cross-platform
 dotnet run --project src/Brewvio
 ```
 
 The app serves the SPA from `wwwroot/` and the API under `/api/*` on
-`http://localhost:5000`. On first run it **seeds demo data** (see below).
+`http://localhost:5000` (the `http` profile in `launchSettings.json`, `ASPNETCORE_ENVIRONMENT=Development`).
+On first run it **seeds demo data** (see below). In Development the JWT signing key comes from
+`appsettings.Development.json` (`Jwt:Key`); set `JWT_KEY` to override it. Check
+`GET /api/health` for a quick liveness + database-connectivity probe.
 
 ### Demo accounts
 
@@ -112,25 +112,25 @@ The app serves the SPA from `wwwroot/` and the API under `/api/*` on
 ### Backend (xUnit, real Postgres)
 
 ```bash
-# needs Postgres on :5433 (scripts/pg-setup.sh)
-dotnet test            # or: bash scripts/test.sh
+# needs Postgres on :5433 (see §2a)
+dotnet test
 ```
 
 Tests spin up an isolated database per test (`brewvio_test_<guid>`) and drop it on dispose, so
-they never touch the dev database. 27 tests cover auth, registration/approval, orders, inventory,
-reporting (periods + margins), and shifts.
+they never touch the dev database. 28 tests cover auth, registration/approval, orders, inventory,
+reporting (periods + margins), and shifts. Override the test server with `BREWVIO_TEST_PG`
+(see §1).
 
-### Frontend (Playwright E2E)
+> The test harness provisions schema with `EnsureCreated()` rather than running migrations, so
+> the `EnableRowLevelSecurity` migration (§5) is not exercised here. RLS behavior is validated
+> directly against Supabase (anon blocked / authenticated allowed), not by the xUnit suite.
 
-```bash
-cd uitest
-npm install            # first time
-node uitest.mjs        # API/SPA must be running on :5000 with a seeded DB
-```
+### Manual smoke test
 
-The smoke test drives: role select → manager login → place order → receipt → dashboard →
-inventory → menu performance → sign-up → manager approval → "Account approved!" → cashier login.
-Screenshots land in `uitest/shots/`.
+After `dotnet run`, exercise the happy path in a browser: role select → manager login → place
+an order → receipt → dashboard → inventory → menu performance → sign-up → manager approval →
+"Account approved!" → cashier login. The seeded demo accounts above cover both roles plus a
+pending sign-up in the approval queue.
 
 ---
 
@@ -210,13 +210,14 @@ dotnet lambda deploy-function --project-location src/Brewvio
 
 Supabase provides its own managed backups (cadence and point-in-time recovery depend on your
 Supabase plan — confirm what your tier includes and document it alongside your RPO/RTO targets).
-For an **independent** copy you control, `scripts/backup-db.sh` takes a compressed `pg_dump` and
-uploads it to S3 with a timestamped key, pruning copies older than `RETENTION_DAYS` (default 30):
+For an **independent** copy you control, take a compressed `pg_dump` and store it off-platform
+(e.g. an S3 bucket with a timestamped key and a retention policy):
 
 ```bash
-DATABASE_URL='postgres://postgres:<pass>@db.<ref>.supabase.co:5432/postgres' \
-BACKUP_BUCKET='my-brewvio-backups' \
-  bash scripts/backup-db.sh
+DATABASE_URL='postgres://postgres:<pass>@db.<ref>.supabase.co:5432/postgres'
+pg_dump "$DATABASE_URL" --no-owner --no-privileges --format=plain \
+  | gzip -9 > "brewvio-$(date -u +%Y%m%dT%H%M%SZ).sql.gz"
+# then upload, e.g.: aws s3 cp brewvio-*.sql.gz s3://my-brewvio-backups/
 ```
 
 > Use the **session-mode** pooler (port `5432`) for `pg_dump`, not the transaction pooler (`6543`).
@@ -227,14 +228,55 @@ BACKUP_BUCKET='my-brewvio-backups' \
 
 | Objective | Suggested target | Basis |
 |-----------|------------------|-------|
-| RPO (max data loss) | ≤ 24h | Daily `backup-db.sh` + Supabase PITR if on a paid tier |
+| RPO (max data loss) | ≤ 24h | Daily `pg_dump` + Supabase PITR if on a paid tier |
 | RTO (max downtime) | ≤ 1h | Redeploy stack + restore latest dump |
 
 ---
 
-## 5. Reference
+## 5. Database security (Row Level Security)
+
+The Supabase database is fronted by an auto-generated **PostgREST data API** that is reachable
+with the public `anon` API key, independently of the Brewvio API. Without protection, every
+`public` table is world-readable and -writable through that endpoint. The `EnableRowLevelSecurity`
+EF migration closes this:
+
+- Enables **RLS** on all 11 application tables (`Users`, `Ingredients`, `MenuItems`, `Modifiers`,
+  `Settings`, `AuditLogs`, `RecipeIngredients`, `Shifts`, `Transactions`, `Payments`,
+  `TransactionItems`). `__EFMigrationsHistory` is intentionally excluded (EF bookkeeping).
+- Adds one policy per table, `authenticated_all_access` (`FOR ALL TO authenticated`), so only
+  the `authenticated` role can read/write; the `anon`/public role matches no policy and is
+  denied entirely.
+- Revokes `EXECUTE` on the `public.rls_auto_enable()` helper from `PUBLIC`, `anon`, and
+  `authenticated` so it can't be invoked via the PostgREST RPC surface.
+
+Apply it like any other migration (session-mode pooler, port `5432`):
+
+```bash
+ConnectionStrings__Default='Host=db.<ref>.supabase.co;Port=5432;Database=postgres;Username=postgres;Password=<pass>;SSL Mode=Require' \
+  dotnet ef database update --project src/Brewvio
+```
+
+**Important caveats:**
+
+- The Brewvio API connects as the `postgres` role, which has `BYPASSRLS`. These policies
+  therefore do **not** change how the app reads/writes data — the app's real authorization is
+  its JWT layer (deny-by-default fallback policy + `[Authorize(Roles = "Manager")]`). RLS here
+  is defense-in-depth for the PostgREST surface only.
+- The migration is idempotent and role-aware: on a plain local Postgres (`:5433`) the
+  `authenticated`/`anon` roles and `rls_auto_enable()` don't exist, so the role/function-specific
+  statements are skipped and only `ENABLE ROW LEVEL SECURITY` runs.
+- To verify on Supabase: a `GET /rest/v1/<Table>` with the `anon` key should return `[]` (and
+  writes `401`), while the `authenticated` role sees rows. Supabase's **security advisors** should
+  report no `rls_disabled_in_public` errors after applying.
+- The remaining `rls_policy_always_true` advisor warnings are expected given the "any
+  authenticated user has full access" requirement. Tighten the policies (e.g. scope cashiers to
+  their own shifts/transactions) if you later need per-row rules.
+
+---
+
+## 6. Reference
 
 - [Deploy ASP.NET Core Web API to Lambda (AWS docs)](https://docs.aws.amazon.com/lambda/latest/dg/csharp-package.html)
 - [aws/aws-lambda-dotnet](https://github.com/aws/aws-lambda-dotnet) — hosting package + Lambda Test Tool
 - [Supabase connection pooling (Supavisor)](https://supabase.com/docs/guides/database/connecting-to-postgres)
-- API contract: see [`api-contract.md`](./api-contract.md).
+- [Supabase Row Level Security](https://supabase.com/docs/guides/database/postgres/row-level-security)

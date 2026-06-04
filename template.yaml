@@ -1,95 +1,85 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
-Description: >
-  Brewvio - C# ASP.NET Core Web API on Lambda behind an API Gateway HTTP API,
-  a static frontend on S3, and a single CloudFront distribution fronting both.
+Description: 'Brewvio - C# ASP.NET Core Web API on Lambda behind an API Gateway HTTP
+  API, a static frontend on S3, and a single CloudFront distribution fronting both.
   Database is Supabase Postgres (reached over SSL via the DATABASE_URL).
 
+  '
 Parameters:
   SsmParameterPath:
     Type: String
     Default: /brewvio
-    Description: >
-      SSM Parameter Store path prefix holding the app secrets. Create
-      <path>/DATABASE_URL and <path>/JWT_KEY as SecureString parameters
-      out-of-band (CloudFormation cannot create SecureString parameters).
+    Description: 'SSM Parameter Store path prefix holding the app secrets. Create
+      <path>/DATABASE_URL and <path>/JWT_KEY as SecureString parameters out-of-band
+      (CloudFormation cannot create SecureString parameters).
 
+      '
 Globals:
   Function:
     Runtime: dotnet8
-    Architectures: [arm64]   # Graviton: cheaper + faster cold start
+    Architectures:
+    - arm64
     MemorySize: 1024
     Timeout: 60
-
 Resources:
   Api:
     Type: AWS::Serverless::HttpApi
     Properties:
-      # Stage-level throttling is global (unlike the per-instance in-memory limiter the app used
-      # to rely on for /api/auth/*). Caps burst + sustained request rate across all Lambda
-      # instances, mitigating sign-up spam and credential-stuffing at the edge.
       DefaultRouteSettings:
         ThrottlingBurstLimit: 50
         ThrottlingRateLimit: 100
-
   BrewvioFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: !Sub '${AWS::StackName}-api'
-      CodeUri: src/Brewvio/
-      Handler: Brewvio        # assembly name — AddAWSLambdaHosting bootstraps the app
+      FunctionName:
+        Fn::Sub: ${AWS::StackName}-api
+      CodeUri: BrewvioFunction
+      Handler: Brewvio
       Environment:
         Variables:
-          # Secrets themselves are pulled from SSM Parameter Store at startup, not stored here.
-          SSM_PARAMETER_PATH: !Ref SsmParameterPath
+          SSM_PARAMETER_PATH:
+            Ref: SsmParameterPath
       Policies:
-        # Least-privilege: read only this app's parameters + decrypt SecureString values.
-        - Version: '2012-10-17'
-          Statement:
-            - Effect: Allow
-              Action:
-                - ssm:GetParametersByPath
-                - ssm:GetParameters
-                - ssm:GetParameter
-              Resource:
-                # GetParametersByPath authorizes against the path resource itself
-                # (parameter/brewvio), while GetParameter(s) authorize against each child
-                # (parameter/brewvio/*). Grant both so path-based loading works.
-                - !Sub 'arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter${SsmParameterPath}'
-                - !Sub 'arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter${SsmParameterPath}/*'
-            - Effect: Allow
-              Action: kms:Decrypt
-              # SecureString decryption. IAM authorizes KMS against the key ARN, so an
-              # alias ARN can't be used here. Scope to the SSM service via condition so
-              # this role can only decrypt when SSM is the caller. If you switch to a
-              # customer-managed key, you can instead pin Resource to that key's ARN.
-              Resource: '*'
-              Condition:
-                StringEquals:
-                  kms:ViaService: !Sub 'ssm.${AWS::Region}.amazonaws.com'
+      - Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Action:
+          - ssm:GetParametersByPath
+          - ssm:GetParameters
+          - ssm:GetParameter
+          Resource:
+          - Fn::Sub: arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter${SsmParameterPath}
+          - Fn::Sub: arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter${SsmParameterPath}/*
+        - Effect: Allow
+          Action: kms:Decrypt
+          Resource: '*'
+          Condition:
+            StringEquals:
+              kms:ViaService:
+                Fn::Sub: ssm.${AWS::Region}.amazonaws.com
       Events:
         Root:
           Type: HttpApi
           Properties:
-            ApiId: !Ref Api
+            ApiId:
+              Ref: Api
             Path: /
             Method: ANY
         Proxy:
           Type: HttpApi
           Properties:
-            ApiId: !Ref Api
-            Path: "/{proxy+}"
+            ApiId:
+              Ref: Api
+            Path: /{proxy+}
             Method: ANY
-
-  # Explicit log group so retention is bounded (30 days) instead of Lambda's implicit never-expire
-  # group. Caps CloudWatch storage cost and is created/deleted with the stack. The name must match
-  # the function's auto log group: /aws/lambda/<FunctionName>.
+    Metadata:
+      SamResourceId: BrewvioFunction
   BrewvioFunctionLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub '/aws/lambda/${AWS::StackName}-api'
+      LogGroupName:
+        Fn::Sub: /aws/lambda/${AWS::StackName}-api
       RetentionInDays: 30
-
   FrontendBucket:
     Type: AWS::S3::Bucket
     Properties:
@@ -98,28 +88,25 @@ Resources:
         BlockPublicPolicy: true
         IgnorePublicAcls: true
         RestrictPublicBuckets: true
-      # Versioning lets a bad SPA deploy be rolled back; the lifecycle rule expires old versions
-      # after 30 days so retained history doesn't accumulate storage cost indefinitely.
       VersioningConfiguration:
         Status: Enabled
       LifecycleConfiguration:
         Rules:
-          - Id: expire-noncurrent-versions
-            Status: Enabled
-            NoncurrentVersionExpiration:
-              NoncurrentDays: 30
-            AbortIncompleteMultipartUpload:
-              DaysAfterInitiation: 7
-
+        - Id: expire-noncurrent-versions
+          Status: Enabled
+          NoncurrentVersionExpiration:
+            NoncurrentDays: 30
+          AbortIncompleteMultipartUpload:
+            DaysAfterInitiation: 7
   FrontendOac:
     Type: AWS::CloudFront::OriginAccessControl
     Properties:
       OriginAccessControlConfig:
-        Name: !Sub '${AWS::StackName}-frontend-oac'
+        Name:
+          Fn::Sub: ${AWS::StackName}-frontend-oac
         OriginAccessControlOriginType: s3
         SigningBehavior: always
         SigningProtocol: sigv4
-
   Distribution:
     Type: AWS::CloudFront::Distribution
     Properties:
@@ -127,50 +114,69 @@ Resources:
         Enabled: true
         DefaultRootObject: index.html
         Origins:
-          - Id: s3-frontend
-            DomainName: !GetAtt FrontendBucket.RegionalDomainName
-            OriginAccessControlId: !Ref FrontendOac
-            S3OriginConfig:
-              OriginAccessIdentity: ''
-          - Id: api
-            DomainName: !Sub '${Api}.execute-api.${AWS::Region}.amazonaws.com'
-            CustomOriginConfig:
-              OriginProtocolPolicy: https-only
+        - Id: s3-frontend
+          DomainName:
+            Fn::GetAtt:
+            - FrontendBucket
+            - RegionalDomainName
+          OriginAccessControlId:
+            Ref: FrontendOac
+          S3OriginConfig:
+            OriginAccessIdentity: ''
+        - Id: api
+          DomainName:
+            Fn::Sub: ${Api}.execute-api.${AWS::Region}.amazonaws.com
+          CustomOriginConfig:
+            OriginProtocolPolicy: https-only
         DefaultCacheBehavior:
           TargetOriginId: s3-frontend
           ViewerProtocolPolicy: redirect-to-https
-          AllowedMethods: [GET, HEAD, OPTIONS]
-          CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6   # CachingOptimized
+          AllowedMethods:
+          - GET
+          - HEAD
+          - OPTIONS
+          CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6
         CacheBehaviors:
-          - PathPattern: /api/*
-            TargetOriginId: api
-            ViewerProtocolPolicy: redirect-to-https
-            AllowedMethods: [GET, HEAD, OPTIONS, PUT, POST, PATCH, DELETE]
-            CachePolicyId: 4135ea2d-6df8-44a3-9df3-4b5a84be39ad   # CachingDisabled
-            OriginRequestPolicyId: b689b0a8-53d0-40ab-baf2-68738e2966ac  # Managed-AllViewerExceptHostHeader
-
+        - PathPattern: /api/*
+          TargetOriginId: api
+          ViewerProtocolPolicy: redirect-to-https
+          AllowedMethods:
+          - GET
+          - HEAD
+          - OPTIONS
+          - PUT
+          - POST
+          - PATCH
+          - DELETE
+          CachePolicyId: 4135ea2d-6df8-44a3-9df3-4b5a84be39ad
+          OriginRequestPolicyId: b689b0a8-53d0-40ab-baf2-68738e2966ac
   FrontendBucketPolicy:
     Type: AWS::S3::BucketPolicy
     Properties:
-      Bucket: !Ref FrontendBucket
+      Bucket:
+        Ref: FrontendBucket
       PolicyDocument:
         Statement:
-          - Effect: Allow
-            Principal:
-              Service: cloudfront.amazonaws.com
-            Action: s3:GetObject
-            Resource: !Sub '${FrontendBucket.Arn}/*'
-            Condition:
-              StringEquals:
-                AWS:SourceArn: !Sub 'arn:aws:cloudfront::${AWS::AccountId}:distribution/${Distribution}'
-
+        - Effect: Allow
+          Principal:
+            Service: cloudfront.amazonaws.com
+          Action: s3:GetObject
+          Resource:
+            Fn::Sub: ${FrontendBucket.Arn}/*
+          Condition:
+            StringEquals:
+              AWS:SourceArn:
+                Fn::Sub: arn:aws:cloudfront::${AWS::AccountId}:distribution/${Distribution}
 Outputs:
   SiteUrl:
     Description: Public URL (frontend + /api on one domain)
-    Value: !Sub 'https://${Distribution.DomainName}'
+    Value:
+      Fn::Sub: https://${Distribution.DomainName}
   FrontendBucketName:
     Description: Upload wwwroot/ contents here, then invalidate CloudFront
-    Value: !Ref FrontendBucket
+    Value:
+      Ref: FrontendBucket
   ApiEndpoint:
     Description: Direct API Gateway endpoint (bypasses CloudFront)
-    Value: !Sub 'https://${Api}.execute-api.${AWS::Region}.amazonaws.com'
+    Value:
+      Fn::Sub: https://${Api}.execute-api.${AWS::Region}.amazonaws.com
