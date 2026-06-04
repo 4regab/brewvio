@@ -324,7 +324,7 @@ window.Views = window.Views || {};
         el('div', { class: 'col-lg-5' }, el('div', { class: 'section-card p-4' },
           el('h3', { class: 'h5 mb-3', text: 'Data backup' }),
           el('p', { class: 'text-secondary small', text: 'Download a full JSON snapshot of the database (users, menu, inventory, transactions, audit log) for safekeeping.' }),
-          button('<i class="bi bi-cloud-download"></i> Download backup', 'btn-outline-secondary', () => Api.download('/api/settings/backup', 'brewvio-backup.json').catch((e) => toast(e.message, 'danger')))))));
+          button('<i class="bi bi-cloud-download"></i> Download backup', 'btn-outline-secondary', () => Api.download('/api/settings/backup', 'chaobrew-backup.json').catch((e) => toast(e.message, 'danger')))))));
     },
   };
 })();

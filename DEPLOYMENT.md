@@ -150,7 +150,7 @@ Before the first deploy, create the two SSM parameters (see §1). After that, re
 dotnet lambda deploy-serverless \
   --template template.yaml \
   --stack-name brewvio \
-  --s3-bucket <your-sam-artifact-bucket> \
+  --s3-bucket aws-sam-cli-managed-default-samclisourcebucket-xczut1dcayng \
   --region ap-southeast-2
 ```
 
@@ -170,62 +170,15 @@ Outputs after deploy:
 ### Publish the frontend
 
 ```bash
-aws s3 sync src/wwwroot/ s3://<FrontendBucketName>/ --delete
+aws s3 sync src/wwwroot/ s3://brewvio-frontendbucket-15gnfq4gkjf0/ --delete
 
 # Invalidate CloudFront cache so changes are served immediately:
-aws cloudfront create-invalidation --distribution-id <id> --paths "/*"
-```
-
-### Database migrations against Supabase
-
-Use the **session-mode** pooler (port `5432`) for migrations, not the transaction pooler:
-
-```bash
-ConnectionStrings__Default='Host=db.<ref>.supabase.co;Port=5432;Database=postgres;Username=postgres;Password=<pass>;SSL Mode=Require' \
-  dotnet ef database update --project src
-```
-
-### Backup & disaster recovery
-
-```bash
-DATABASE_URL='postgres://postgres:<pass>@db.<ref>.supabase.co:5432/postgres'
-pg_dump "$DATABASE_URL" --no-owner --no-privileges --format=plain \
-  | gzip -9 > "brewvio-$(date -u +%Y%m%dT%H%M%SZ).sql.gz"
-aws s3 cp brewvio-*.sql.gz s3://my-brewvio-backups/
-```
-
-> Use the session-mode pooler (port `5432`) for `pg_dump`. Restore with:
-> `gunzip -c brewvio-<stamp>.sql.gz | psql "$DATABASE_URL"`
-
-| Objective | Suggested target |
-|-----------|-----------------|
-| RPO (max data loss) | ≤ 24h |
-| RTO (max downtime) | ≤ 1h |
-
----
-
-## 5. Database security (Row Level Security)
-
-The `EnableRowLevelSecurity` EF migration locks down Supabase's auto-generated PostgREST API:
-
-- Enables RLS on all 11 application tables
-- Adds an `authenticated_all_access` policy (`FOR ALL TO authenticated`) — the `anon` role is
-  blocked entirely
-- Revokes `EXECUTE` on `public.rls_auto_enable()` from `anon`/`authenticated`
-
-The Brewvio API connects as the `postgres` role (`BYPASSRLS`), so these policies don't affect
-the app — they're defense-in-depth for the PostgREST surface only.
-
-Apply like any other migration (session-mode pooler, port `5432`):
-
-```bash
-ConnectionStrings__Default='Host=db.<ref>.supabase.co;Port=5432;Database=postgres;Username=postgres;Password=<pass>;SSL Mode=Require' \
-  dotnet ef database update --project src
+aws cloudfront create-invalidation --distribution-id E1CWDAT3NI1LSD --paths "/*"
 ```
 
 ---
 
-## 6. Reference
+## 5. Reference
 
 - [Deploy ASP.NET Core Web API to Lambda](https://docs.aws.amazon.com/lambda/latest/dg/csharp-package.html)
 - [aws/aws-lambda-dotnet](https://github.com/aws/aws-lambda-dotnet)

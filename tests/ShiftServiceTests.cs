@@ -19,7 +19,7 @@ public class ShiftServiceTests(SharedTestDb fixture) : IClassFixture<SharedTestD
     public async Task Shift_tracks_sales_and_closes_with_zero_variance()
     {
         using var t = fixture.Begin();
-        await DatabaseInitializer.SeedAllAsync(t.Db);
+        await DatabaseInitializer.SeedAllOriginalAsync(t.Db);
         var (shifts, orders) = Build(t);
         var latte = t.Db.MenuItems.First(m => m.Name == "Caffe Latte");
 
@@ -44,7 +44,7 @@ public class ShiftServiceTests(SharedTestDb fixture) : IClassFixture<SharedTestD
     public async Task Start_is_idempotent_when_shift_already_open()
     {
         using var t = fixture.Begin();
-        await DatabaseInitializer.SeedAllAsync(t.Db);
+        await DatabaseInitializer.SeedAllOriginalAsync(t.Db);
         var (shifts, _) = Build(t);
 
         var first = await shifts.StartAsync(500m);
@@ -59,7 +59,7 @@ public class ShiftServiceTests(SharedTestDb fixture) : IClassFixture<SharedTestD
     public async Task End_returns_null_when_no_open_shift()
     {
         using var t = fixture.Begin();
-        await DatabaseInitializer.SeedAllAsync(t.Db);
+        await DatabaseInitializer.SeedAllOriginalAsync(t.Db);
         var (shifts, _) = Build(t);
 
         Assert.Null(await shifts.EndAsync(500m));
@@ -69,7 +69,7 @@ public class ShiftServiceTests(SharedTestDb fixture) : IClassFixture<SharedTestD
     public async Task GetCurrent_returns_null_when_no_open_shift()
     {
         using var t = fixture.Begin();
-        await DatabaseInitializer.SeedAllAsync(t.Db);
+        await DatabaseInitializer.SeedAllOriginalAsync(t.Db);
         var (shifts, _) = Build(t);
 
         Assert.Null(await shifts.GetCurrentAsync());
@@ -79,7 +79,7 @@ public class ShiftServiceTests(SharedTestDb fixture) : IClassFixture<SharedTestD
     public async Task Closed_shift_reports_non_zero_variance_when_cash_differs()
     {
         using var t = fixture.Begin();
-        await DatabaseInitializer.SeedAllAsync(t.Db);
+        await DatabaseInitializer.SeedAllOriginalAsync(t.Db);
         var (shifts, _) = Build(t);
 
         await shifts.StartAsync(1000m);

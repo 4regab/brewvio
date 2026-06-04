@@ -15,7 +15,7 @@ public class SettingsService(BrewvioDbContext db, AuditService audit)
     {
         var map = await db.Settings.ToDictionaryAsync(s => s.Key, s => s.Value);
         return new StoreSettingsDto(
-            map.GetValueOrDefault(StoreName, "Brewvio Coffee"),
+            map.GetValueOrDefault(StoreName, "Chao & Brew"),
             map.GetValueOrDefault(Address, ""),
             map.GetValueOrDefault(Currency, "PHP"),
             decimal.TryParse(map.GetValueOrDefault(TaxRate), out var t) ? t : 0m);

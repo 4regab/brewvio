@@ -22,7 +22,7 @@ public class OrderServiceTests(SharedTestDb fixture) : IClassFixture<SharedTestD
     public async Task CreateOrder_computes_totals_with_tax_and_deducts_recipe_ingredients()
     {
         using var t = fixture.Begin();
-        await DatabaseInitializer.SeedAllAsync(t.Db);
+        await DatabaseInitializer.SeedAllOriginalAsync(t.Db);
         var (svc, db) = Build(t);
         var latte = db.MenuItems.First(m => m.Name == "Caffe Latte");
         decimal Stock(string n) => t.NewContext().Ingredients.First(i => i.Name == n).StockLevel;
@@ -51,7 +51,7 @@ public class OrderServiceTests(SharedTestDb fixture) : IClassFixture<SharedTestD
     public async Task CreateOrder_supports_split_payment()
     {
         using var t = fixture.Begin();
-        await DatabaseInitializer.SeedAllAsync(t.Db);
+        await DatabaseInitializer.SeedAllOriginalAsync(t.Db);
         var (svc, db) = Build(t);
         var latte = db.MenuItems.First(m => m.Name == "Caffe Latte");
 
@@ -68,7 +68,7 @@ public class OrderServiceTests(SharedTestDb fixture) : IClassFixture<SharedTestD
     public async Task CreateOrder_rejects_insufficient_payment()
     {
         using var t = fixture.Begin();
-        await DatabaseInitializer.SeedAllAsync(t.Db);
+        await DatabaseInitializer.SeedAllOriginalAsync(t.Db);
         var (svc, db) = Build(t);
         var latte = db.MenuItems.First(m => m.Name == "Caffe Latte");
 
@@ -83,7 +83,7 @@ public class OrderServiceTests(SharedTestDb fixture) : IClassFixture<SharedTestD
     public async Task CreateOrder_applies_discount_before_tax()
     {
         using var t = fixture.Begin();
-        await DatabaseInitializer.SeedAllAsync(t.Db);
+        await DatabaseInitializer.SeedAllOriginalAsync(t.Db);
         var (svc, db) = Build(t);
         var latte = db.MenuItems.First(m => m.Name == "Caffe Latte");
 
@@ -99,7 +99,7 @@ public class OrderServiceTests(SharedTestDb fixture) : IClassFixture<SharedTestD
     public async Task Refund_restocks_ingredients_and_marks_refunded()
     {
         using var t = fixture.Begin();
-        await DatabaseInitializer.SeedAllAsync(t.Db);
+        await DatabaseInitializer.SeedAllOriginalAsync(t.Db);
         var (svc, db) = Build(t);
         var latte = db.MenuItems.First(m => m.Name == "Caffe Latte");
         decimal Stock(string n) => t.NewContext().Ingredients.First(i => i.Name == n).StockLevel;
@@ -119,7 +119,7 @@ public class OrderServiceTests(SharedTestDb fixture) : IClassFixture<SharedTestD
     public async Task CreateOrder_rejects_empty_cart()
     {
         using var t = fixture.Begin();
-        await DatabaseInitializer.SeedAllAsync(t.Db);
+        await DatabaseInitializer.SeedAllOriginalAsync(t.Db);
         var (svc, _) = Build(t);
 
         await Assert.ThrowsAsync<ArgumentException>(() =>
@@ -131,7 +131,7 @@ public class OrderServiceTests(SharedTestDb fixture) : IClassFixture<SharedTestD
     public async Task CreateOrder_rejects_inactive_menu_item()
     {
         using var t = fixture.Begin();
-        await DatabaseInitializer.SeedAllAsync(t.Db);
+        await DatabaseInitializer.SeedAllOriginalAsync(t.Db);
         var (svc, db) = Build(t);
         var latte = db.MenuItems.First(m => m.Name == "Caffe Latte");
         latte.IsActive = false;
@@ -146,7 +146,7 @@ public class OrderServiceTests(SharedTestDb fixture) : IClassFixture<SharedTestD
     public async Task Refund_of_already_refunded_transaction_throws()
     {
         using var t = fixture.Begin();
-        await DatabaseInitializer.SeedAllAsync(t.Db);
+        await DatabaseInitializer.SeedAllOriginalAsync(t.Db);
         var (svc, db) = Build(t);
         var latte = db.MenuItems.First(m => m.Name == "Caffe Latte");
         var sale = await svc.CreateAsync(new CreateOrderRequest(Cart(latte.Id, 1), 0m,
@@ -162,7 +162,7 @@ public class OrderServiceTests(SharedTestDb fixture) : IClassFixture<SharedTestD
     public async Task Refund_with_empty_reason_throws()
     {
         using var t = fixture.Begin();
-        await DatabaseInitializer.SeedAllAsync(t.Db);
+        await DatabaseInitializer.SeedAllOriginalAsync(t.Db);
         var (svc, db) = Build(t);
         var latte = db.MenuItems.First(m => m.Name == "Caffe Latte");
         var sale = await svc.CreateAsync(new CreateOrderRequest(Cart(latte.Id, 1), 0m,
@@ -176,7 +176,7 @@ public class OrderServiceTests(SharedTestDb fixture) : IClassFixture<SharedTestD
     public async Task Cancel_writes_audit_entry()
     {
         using var t = fixture.Begin();
-        await DatabaseInitializer.SeedAllAsync(t.Db);
+        await DatabaseInitializer.SeedAllOriginalAsync(t.Db);
         var (svc, _) = Build(t);
 
         await svc.CancelAsync("Customer walked away");
@@ -191,7 +191,7 @@ public class OrderServiceTests(SharedTestDb fixture) : IClassFixture<SharedTestD
     public async Task Concurrent_orders_on_same_ingredient_do_not_lose_a_deduction()
     {
         using var t = new TestDb();
-        await DatabaseInitializer.SeedAllAsync(t.Db);
+        await DatabaseInitializer.SeedAllOriginalAsync(t.Db);
         var cashierId = t.Db.Users.First(u => u.Username == "cashier").Id;
         var latte = t.Db.MenuItems.First(m => m.Name == "Caffe Latte");
         decimal Stock(string n) { using var v = t.NewContext(); return v.Ingredients.First(i => i.Name == n).StockLevel; }

@@ -17,13 +17,13 @@ public class BrewvioDbContext(DbContextOptions<BrewvioDbContext> options) : DbCo
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
     public DbSet<AppSetting> Settings => Set<AppSetting>();
 
-    protected override void OnModelCreating(ModelBuilder b)
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
-        b.Entity<User>().HasIndex(u => u.Username).IsUnique();
-        b.Entity<AppSetting>().HasKey(s => s.Key);
+        modelBuilder.Entity<User>().HasIndex(u => u.Username).IsUnique();
+        modelBuilder.Entity<AppSetting>().HasKey(s => s.Key);
 
         // Decimal precision — money: (12,2); quantities: (12,3); unit cost: (12,4).
-        b.Entity<Ingredient>(e =>
+        modelBuilder.Entity<Ingredient>(e =>
         {
             e.Property(x => x.StockLevel).HasPrecision(12, 3);
             e.Property(x => x.Threshold).HasPrecision(12, 3);
@@ -37,53 +37,53 @@ public class BrewvioDbContext(DbContextOptions<BrewvioDbContext> options) : DbCo
             e.UseXminAsConcurrencyToken();
 #pragma warning restore CS0618
         });
-        b.Entity<MenuItem>().Property(x => x.Price).HasPrecision(12, 2);
-        b.Entity<Modifier>().Property(x => x.PriceDelta).HasPrecision(12, 2);
-        b.Entity<RecipeIngredient>().Property(x => x.Quantity).HasPrecision(12, 3);
-        b.Entity<Shift>(e =>
+        modelBuilder.Entity<MenuItem>().Property(x => x.Price).HasPrecision(12, 2);
+        modelBuilder.Entity<Modifier>().Property(x => x.PriceDelta).HasPrecision(12, 2);
+        modelBuilder.Entity<RecipeIngredient>().Property(x => x.Quantity).HasPrecision(12, 3);
+        modelBuilder.Entity<Shift>(e =>
         {
             e.Property(x => x.StartingCash).HasPrecision(12, 2);
             e.Property(x => x.EndingCash).HasPrecision(12, 2);
         });
-        b.Entity<Transaction>(e =>
+        modelBuilder.Entity<Transaction>(e =>
         {
             e.Property(x => x.Subtotal).HasPrecision(12, 2);
             e.Property(x => x.DiscountAmount).HasPrecision(12, 2);
             e.Property(x => x.TaxAmount).HasPrecision(12, 2);
             e.Property(x => x.TotalAmount).HasPrecision(12, 2);
         });
-        b.Entity<TransactionItem>(e =>
+        modelBuilder.Entity<TransactionItem>(e =>
         {
             e.Property(x => x.UnitPrice).HasPrecision(12, 2);
             e.Property(x => x.LineTotal).HasPrecision(12, 2);
         });
-        b.Entity<Payment>().Property(x => x.Amount).HasPrecision(12, 2);
+        modelBuilder.Entity<Payment>().Property(x => x.Amount).HasPrecision(12, 2);
 
         // Recipe: deleting a menu item removes its recipe rows; ingredients in use can't be deleted.
-        b.Entity<RecipeIngredient>()
+        modelBuilder.Entity<RecipeIngredient>()
             .HasOne(r => r.MenuItem).WithMany(m => m.Recipe)
             .HasForeignKey(r => r.MenuItemId).OnDelete(DeleteBehavior.Cascade);
-        b.Entity<RecipeIngredient>()
+        modelBuilder.Entity<RecipeIngredient>()
             .HasOne(r => r.Ingredient).WithMany(i => i.RecipeIngredients)
             .HasForeignKey(r => r.IngredientId).OnDelete(DeleteBehavior.Restrict);
 
         // Transaction graph: items/payments cascade; menu item & cashier are protected from delete.
-        b.Entity<TransactionItem>()
+        modelBuilder.Entity<TransactionItem>()
             .HasOne(t => t.Transaction).WithMany(x => x.Items)
             .HasForeignKey(t => t.TransactionId).OnDelete(DeleteBehavior.Cascade);
-        b.Entity<TransactionItem>()
+        modelBuilder.Entity<TransactionItem>()
             .HasOne(t => t.MenuItem).WithMany()
             .HasForeignKey(t => t.MenuItemId).OnDelete(DeleteBehavior.Restrict);
-        b.Entity<Payment>()
+        modelBuilder.Entity<Payment>()
             .HasOne(p => p.Transaction).WithMany(x => x.Payments)
             .HasForeignKey(p => p.TransactionId).OnDelete(DeleteBehavior.Cascade);
-        b.Entity<Transaction>()
+        modelBuilder.Entity<Transaction>()
             .HasOne(t => t.Cashier).WithMany()
             .HasForeignKey(t => t.CashierId).OnDelete(DeleteBehavior.Restrict);
-        b.Entity<Transaction>()
+        modelBuilder.Entity<Transaction>()
             .HasOne(t => t.Shift).WithMany(s => s.Transactions)
             .HasForeignKey(t => t.ShiftId).OnDelete(DeleteBehavior.SetNull);
-        b.Entity<Shift>()
+        modelBuilder.Entity<Shift>()
             .HasOne(s => s.Cashier).WithMany()
             .HasForeignKey(s => s.CashierId).OnDelete(DeleteBehavior.Restrict);
     }

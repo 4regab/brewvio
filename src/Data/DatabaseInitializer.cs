@@ -6,8 +6,6 @@ namespace Brewvio.Data;
 
 public static class DatabaseInitializer
 {
-    // Seeds a full demo dataset when the database is empty. Never crashes startup:
-    // if the database/table isn't reachable yet, it logs and continues (run EF migrations first).
     public static async Task SeedAsync(WebApplication app)
     {
         using var scope = app.Services.CreateScope();
@@ -23,70 +21,158 @@ public static class DatabaseInitializer
         }
     }
 
+    public static Task SeedAllOriginalAsync(BrewvioDbContext db) => SeedTestDataAsync(db);
+
+    /// <summary>
+    /// Legacy test seed data — provides the old menu items/ingredients that existing tests depend on.
+    /// </summary>
+    public static async Task SeedTestDataAsync(BrewvioDbContext db)
+    {
+        // ----- Users (same across both seeds) -----
+        db.Users.AddRange(
+            new User { Username = "manager", FullName = "Store Manager", Role = Roles.Manager, Status = UserStatus.Active, IsActive = true, PasswordHash = PasswordHasher.Hash("Manager@123") },
+            new User { Username = "cashier", FullName = "Front Cashier", Role = Roles.Cashier, Status = UserStatus.Active, IsActive = true, PasswordHash = PasswordHasher.Hash("Cashier@123") },
+            new User { Username = "newcashier", FullName = "Jamie Pending", Role = Roles.Cashier, Status = UserStatus.Pending, IsActive = false, PasswordHash = PasswordHasher.Hash("Pending@123") });
+
+        // ----- Ingredients (test set) -----
+        var milk = new Ingredient { Code = "ING-01", Name = "Whole Milk", Category = "Dairy", Unit = "ml", StockLevel = 5000, Threshold = 1000, CostPerUnit = 0.08m };
+        var beans = new Ingredient { Code = "ING-02", Name = "Espresso Beans", Category = "Coffee", Unit = "g", StockLevel = 3000, Threshold = 500, CostPerUnit = 0.50m };
+        var cup = new Ingredient { Code = "ING-03", Name = "Paper Cup (12oz)", Category = "Supplies", Unit = "pc", StockLevel = 500, Threshold = 100, CostPerUnit = 2.50m };
+        var sugar = new Ingredient { Code = "ING-04", Name = "Sugar", Category = "Condiments", Unit = "g", StockLevel = 5000, Threshold = 1000, CostPerUnit = 0.02m };
+        db.Ingredients.AddRange(milk, beans, cup, sugar);
+
+        RecipeIngredient R(Ingredient i, decimal qty) => new() { Ingredient = i, Quantity = qty };
+
+        // ----- Menu Items (test set) -----
+        db.MenuItems.AddRange(
+            new MenuItem { Name = "Caffe Latte", Category = "Espresso", Price = 140m, Recipe = new List<RecipeIngredient> { R(milk, 200), R(beans, 18), R(cup, 1) } },
+            new MenuItem { Name = "Espresso", Category = "Espresso", Price = 100m, Recipe = new List<RecipeIngredient> { R(beans, 18), R(cup, 1) } });
+
+        // ----- Modifiers -----
+        db.Modifiers.AddRange(
+            new Modifier { Name = "Extra Shot", GroupName = "Add-ons", PriceDelta = 30m },
+            new Modifier { Name = "Oat Milk", GroupName = "Milk", PriceDelta = 25m });
+
+        // ----- Settings -----
+        db.Settings.AddRange(
+            new AppSetting { Key = "StoreName", Value = "Chao & Brew" },
+            new AppSetting { Key = "Address", Value = "PUP Quezon City Campus" },
+            new AppSetting { Key = "Currency", Value = "PHP" },
+            new AppSetting { Key = "TaxRatePercent", Value = "12" });
+
+        await db.SaveChangesAsync();
+    }
+
     public static async Task SeedAllAsync(BrewvioDbContext db)
     {
         // ----- Users -----
         db.Users.AddRange(
             new User { Username = "manager", FullName = "Store Manager", Role = Roles.Manager, Status = UserStatus.Active, IsActive = true, PasswordHash = PasswordHasher.Hash("Manager@123") },
             new User { Username = "cashier", FullName = "Front Cashier", Role = Roles.Cashier, Status = UserStatus.Active, IsActive = true, PasswordHash = PasswordHasher.Hash("Cashier@123") },
-            // A demo pending sign-up so the Manager's approval queue isn't empty on first run.
             new User { Username = "newcashier", FullName = "Jamie Pending", Role = Roles.Cashier, Status = UserStatus.Pending, IsActive = false, PasswordHash = PasswordHasher.Hash("Pending@123") });
 
-        // ----- Ingredients (Inventory) -----
-        Ingredient Ing(string code, string name, string category, string unit, decimal stock, decimal threshold, decimal cost) =>
-            new() { Code = code, Name = name, Category = category, Unit = unit, StockLevel = stock, Threshold = threshold, CostPerUnit = cost };
+        // ----- Ingredients (kept minimal — no recipes needed for food items) -----
+        var rice = new Ingredient { Code = "FOOD-01", Name = "Rice", Category = "Food", Unit = "serving", StockLevel = 500, Threshold = 50, CostPerUnit = 8m };
+        var pork = new Ingredient { Code = "FOOD-02", Name = "Pork", Category = "Food", Unit = "serving", StockLevel = 200, Threshold = 30, CostPerUnit = 50m };
+        var chicken = new Ingredient { Code = "FOOD-03", Name = "Chicken", Category = "Food", Unit = "serving", StockLevel = 200, Threshold = 30, CostPerUnit = 40m };
+        var egg = new Ingredient { Code = "FOOD-04", Name = "Egg", Category = "Food", Unit = "pc", StockLevel = 300, Threshold = 50, CostPerUnit = 8m };
+        var noodles = new Ingredient { Code = "FOOD-05", Name = "Noodles", Category = "Food", Unit = "serving", StockLevel = 300, Threshold = 50, CostPerUnit = 15m };
+        var coffee = new Ingredient { Code = "BVRG-01", Name = "Cold Brew Coffee", Category = "Beverage", Unit = "ml", StockLevel = 10000, Threshold = 2000, CostPerUnit = 0.08m };
+        var milk = new Ingredient { Code = "BVRG-02", Name = "Milk", Category = "Beverage", Unit = "ml", StockLevel = 10000, Threshold = 2000, CostPerUnit = 0.06m };
+        var matcha = new Ingredient { Code = "BVRG-03", Name = "Matcha Powder", Category = "Beverage", Unit = "g", StockLevel = 1000, Threshold = 200, CostPerUnit = 1.20m };
+        var syrup = new Ingredient { Code = "BVRG-04", Name = "Flavored Syrup", Category = "Beverage", Unit = "ml", StockLevel = 3000, Threshold = 500, CostPerUnit = 0.10m };
+        var cup = new Ingredient { Code = "SUPP-01", Name = "Cup", Category = "Supplies", Unit = "pc", StockLevel = 1000, Threshold = 200, CostPerUnit = 3m };
+        db.Ingredients.AddRange(rice, pork, chicken, egg, noodles, coffee, milk, matcha, syrup, cup);
 
-        var beans = Ing("BEAN-01", "Espresso Beans", "Coffee", "g", 5000, 1000, 0.50m);
-        var brewed = Ing("BREW-01", "Brewed Coffee", "Coffee", "ml", 8000, 2000, 0.02m);
-        var milk = Ing("MILK-01", "Whole Milk", "Dairy", "ml", 10000, 2000, 0.08m);
-        var oat = Ing("MILK-02", "Oat Milk", "Dairy", "ml", 4000, 1000, 0.15m);
-        var almond = Ing("MILK-03", "Almond Milk", "Dairy", "ml", 3000, 800, 0.14m);
-        var vanilla = Ing("SYRP-01", "Vanilla Syrup", "Syrup", "ml", 2000, 500, 0.10m);
-        var caramel = Ing("SYRP-02", "Caramel Syrup", "Syrup", "ml", 2000, 500, 0.10m);
-        var chocolate = Ing("SYRP-03", "Chocolate Syrup", "Syrup", "ml", 2000, 500, 0.12m);
-        var matcha = Ing("POWD-01", "Matcha Powder", "Powder", "g", 800, 300, 1.20m);
-        var tea = Ing("TEA-01", "Tea Leaves", "Tea", "g", 1500, 400, 0.30m);
-        var sugar = Ing("SUGR-01", "Sugar", "Pantry", "g", 6000, 1000, 0.02m);
-        var ice = Ing("ICE-01", "Ice", "Pantry", "g", 20000, 5000, 0.005m);
-        var whip = Ing("CREM-01", "Whipped Cream", "Dairy", "ml", 2000, 500, 0.05m);
-        var cup = Ing("SUPP-01", "Paper Cup (12oz)", "Supplies", "pc", 500, 100, 2.50m);
-        db.Ingredients.AddRange(beans, brewed, milk, oat, almond, vanilla, caramel, chocolate,
-            matcha, tea, sugar, ice, whip, cup);
-
-        // ----- Menu items & recipes -----
         RecipeIngredient R(Ingredient i, decimal qty) => new() { Ingredient = i, Quantity = qty };
         MenuItem Item(string name, string cat, decimal price, params RecipeIngredient[] recipe) =>
             new() { Name = name, Category = cat, Price = price, Recipe = recipe.ToList() };
 
         db.MenuItems.AddRange(
-            Item("Espresso", "Espresso", 90m, R(beans, 18), R(cup, 1)),
-            Item("Americano", "Espresso", 110m, R(beans, 18), R(cup, 1)),
-            Item("Cappuccino", "Espresso", 130m, R(beans, 18), R(milk, 120), R(cup, 1)),
-            Item("Caffe Latte", "Espresso", 140m, R(beans, 18), R(milk, 200), R(cup, 1)),
-            Item("Flat White", "Espresso", 150m, R(beans, 27), R(milk, 150), R(cup, 1)),
-            Item("Caramel Macchiato", "Espresso", 160m, R(beans, 18), R(milk, 200), R(caramel, 20), R(cup, 1)),
-            Item("Cafe Mocha", "Espresso", 160m, R(beans, 18), R(milk, 180), R(chocolate, 25), R(cup, 1)),
-            Item("Iced Latte", "Cold", 150m, R(beans, 18), R(milk, 150), R(ice, 150), R(cup, 1)),
-            Item("Brewed Coffee", "Coffee", 100m, R(brewed, 240), R(cup, 1)),
-            Item("Matcha Latte", "Non-Coffee", 150m, R(matcha, 8), R(milk, 200), R(sugar, 10), R(cup, 1)),
-            Item("Hot Chocolate", "Non-Coffee", 130m, R(chocolate, 40), R(milk, 220), R(cup, 1)),
-            Item("Iced Tea", "Tea", 90m, R(tea, 5), R(ice, 200), R(sugar, 15), R(cup, 1)));
+            // ── Food ──
+            Item("Pork Tonkatsu",      "Food",   149m, R(pork, 1), R(rice, 1)),
+            Item("Chicken Tonkatsu",   "Food",   149m, R(chicken, 1), R(rice, 1)),
+            Item("Chicken Poppers",    "Food",   109m, R(chicken, 1)),
+            Item("Chicken Fingers",    "Food",   129m, R(chicken, 1)),
+            Item("Crabstick Katsu",    "Food",    99m),
+            Item("Spamsilog",          "Food",    99m, R(rice, 1), R(egg, 1)),
+            Item("Hungariansilog",     "Food",    99m, R(rice, 1), R(egg, 1)),
+            Item("Tocilog",            "Food",    99m, R(rice, 1), R(egg, 1)),
+            Item("Tapsilog",           "Food",   109m, R(rice, 1), R(egg, 1)),
+            Item("Sausilog",           "Food",   109m, R(rice, 1), R(egg, 1)),
+            Item("Bacsilog",           "Food",    99m, R(rice, 1), R(egg, 1)),
+            Item("Rice",               "Food",    20m, R(rice, 1)),
+            Item("Egg",                "Food",    18m, R(egg, 1)),
+            Item("Tonkatsu Sauce",     "Food",    15m),
 
-        // ----- Modifiers (price-only add-ons/choices) -----
-        Modifier Mod(string name, string group, decimal delta) =>
-            new() { Name = name, GroupName = group, PriceDelta = delta };
+            // ── Cold Brew Coffee ──
+            Item("Americano",          "Cold Brew Coffee",  55m, R(coffee, 240), R(cup, 1)),
+            Item("Latte",              "Cold Brew Coffee",  59m, R(coffee, 150), R(milk, 100), R(cup, 1)),
+            Item("Spanish Latte",      "Cold Brew Coffee",  65m, R(coffee, 150), R(milk, 120), R(cup, 1)),
+            Item("Vanilla Latte",      "Cold Brew Coffee",  65m, R(coffee, 150), R(milk, 100), R(syrup, 20), R(cup, 1)),
+            Item("Caramel Macchiato",  "Cold Brew Coffee",  69m, R(coffee, 150), R(milk, 100), R(syrup, 20), R(cup, 1)),
+            Item("Cold Brew Latte",    "Cold Brew Coffee",  69m, R(coffee, 200), R(milk, 100), R(cup, 1)),
+            Item("Mocha",              "Cold Brew Coffee",  69m, R(coffee, 150), R(milk, 100), R(syrup, 20), R(cup, 1)),
+            Item("Chao's Coldbrew",    "Cold Brew Coffee",  79m, R(coffee, 240), R(cup, 1)),
+
+            // ── Non-Coffee ──
+            Item("Strawberry Milk",    "Non-Coffee", 65m, R(milk, 200), R(syrup, 20), R(cup, 1)),
+            Item("Blueberry Milk",     "Non-Coffee", 65m, R(milk, 200), R(syrup, 20), R(cup, 1)),
+            Item("Mango Cream",        "Non-Coffee", 69m, R(milk, 180), R(syrup, 20), R(cup, 1)),
+            Item("Iced Choco",         "Non-Coffee", 65m, R(milk, 200), R(syrup, 25), R(cup, 1)),
+            Item("Milky Oreo",         "Non-Coffee", 69m, R(milk, 200), R(cup, 1)),
+            Item("Berry Choco Latte",  "Non-Coffee", 75m, R(milk, 180), R(syrup, 20), R(cup, 1)),
+
+            // ── Matcha Series ──
+            Item("Matcha Latte",       "Matcha Series",  69m, R(matcha, 8), R(milk, 200), R(cup, 1)),
+            Item("Dirty Matcha",       "Matcha Series",  75m, R(matcha, 8), R(milk, 180), R(coffee, 60), R(cup, 1)),
+            Item("Strawberry Matcha",  "Matcha Series",  75m, R(matcha, 8), R(milk, 180), R(syrup, 20), R(cup, 1)),
+            Item("Matcha Frappe",      "Matcha Series",  79m, R(matcha, 10), R(milk, 180), R(cup, 1)),
+
+            // ── Frappe ──
+            Item("Frappe",             "Frappe",     69m, R(milk, 200), R(cup, 1)),
+            Item("Frappuccino Mocha",  "Frappe",     75m, R(coffee, 100), R(milk, 180), R(syrup, 20), R(cup, 1)),
+            Item("Milo Dinosaur",      "Frappe",     79m, R(milk, 200), R(cup, 1)),
+            Item("Java Chip",          "Frappe",     85m, R(coffee, 100), R(milk, 180), R(cup, 1)),
+
+            // ── Fruit Soda ──
+            Item("Fruit Soda (16oz)", "Fruit Soda",  39m, R(cup, 1)),
+            Item("Fruit Soda (22oz)", "Fruit Soda",  49m, R(cup, 1)),
+
+            // ── Qik's Fried Noodles ──
+            Item("Plain Noodles",                       "Qik's Fried Noodles",  40m, R(noodles, 1)),
+            Item("Noodles with Egg",                    "Qik's Fried Noodles",  55m, R(noodles, 1), R(egg, 1)),
+            Item("Noodles with Pork Siomai",            "Qik's Fried Noodles",  55m, R(noodles, 1)),
+            Item("Noodles with Japanese Siomai",        "Qik's Fried Noodles",  58m, R(noodles, 1)),
+            Item("Noodles with Korean Sausage",         "Qik's Fried Noodles",  70m, R(noodles, 1)),
+            Item("Overload Noodles",                    "Qik's Fried Noodles",  78m, R(noodles, 1)),
+            Item("Overload Noodles with 2 Eggs",        "Qik's Fried Noodles", 108m, R(noodles, 1), R(egg, 2)),
+            Item("Overload Noodles w/ 4 Pork Siomai",   "Qik's Fried Noodles", 108m, R(noodles, 1)),
+            Item("Overload Noodles w/ 4 Jap Siomai",    "Qik's Fried Noodles", 110m, R(noodles, 1)),
+            Item("Overload Noodles w/ 2 Korean Sausage","Qik's Fried Noodles", 138m, R(noodles, 1)),
+            Item("Toge",                                "Qik's Fried Noodles",  10m),
+            Item("Egg (Noodles)",                       "Qik's Fried Noodles",  15m, R(egg, 1)),
+            Item("Pork Siomai",                         "Qik's Fried Noodles",  15m),
+            Item("Japanese Siomai",                     "Qik's Fried Noodles",  18m));
+
+        // ----- Modifiers -----
         db.Modifiers.AddRange(
-            Mod("Oat Milk", "Milk", 20m), Mod("Almond Milk", "Milk", 20m),
-            Mod("Vanilla Syrup", "Syrup", 15m), Mod("Caramel Syrup", "Syrup", 15m),
-            Mod("Upsize (Large)", "Size", 30m), Mod("Extra Shot", "Extras", 25m),
-            Mod("Whipped Cream", "Extras", 20m), Mod("Less Sugar", "Preference", 0m));
+            new Modifier { Name = "16oz",         GroupName = "Size",     PriceDelta =   0m },
+            new Modifier { Name = "22oz",         GroupName = "Size",     PriceDelta =  20m },
+            new Modifier { Name = "Coldbrew",     GroupName = "Add-ons",  PriceDelta =  25m },
+            new Modifier { Name = "Milk",         GroupName = "Add-ons",  PriceDelta =  25m },
+            new Modifier { Name = "Drizzle/Syrup",GroupName = "Add-ons",  PriceDelta =  15m },
+            new Modifier { Name = "Cold Foam",    GroupName = "Add-ons",  PriceDelta =  25m },
+            new Modifier { Name = "Whip Cream",   GroupName = "Add-ons",  PriceDelta =  25m },
+            new Modifier { Name = "Less Sugar",   GroupName = "Preference",PriceDelta =  0m },
+            new Modifier { Name = "No Ice",       GroupName = "Preference",PriceDelta =  0m });
 
         // ----- Settings -----
         db.Settings.AddRange(
-            new AppSetting { Key = "StoreName", Value = "Brewvio Coffee" },
-            new AppSetting { Key = "Address", Value = "PUP Quezon City Campus" },
-            new AppSetting { Key = "Currency", Value = "PHP" },
-            new AppSetting { Key = "TaxRatePercent", Value = "12" });
+            new AppSetting { Key = "StoreName",      Value = "Chao & Brew" },
+            new AppSetting { Key = "Address",        Value = "PUP Quezon City Campus" },
+            new AppSetting { Key = "Currency",       Value = "PHP" },
+            new AppSetting { Key = "TaxRatePercent", Value = "0" });
 
         await db.SaveChangesAsync();
     }

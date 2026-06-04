@@ -1,10 +1,12 @@
+using System.Text.Json.Serialization;
+
 namespace Brewvio.Dtos;
 
 // ----- Placing an order -----
-public record CartItemInput(int MenuItemId, int Quantity, IReadOnlyList<int> ModifierIds, string? Notes);
-public record PaymentInput(string Method, decimal Amount);          // Method: Cash | Card
+public record CartItemInput([property: JsonRequired] int MenuItemId, [property: JsonRequired] int Quantity, IReadOnlyList<int> ModifierIds, string? Notes);
+public record PaymentInput(string Method, [property: JsonRequired] decimal Amount);          // Method: Cash | Card
 // Discount is an absolute amount; PaymentMethod is derived from the payments (1=that method, >1=Split).
-public record CreateOrderRequest(IReadOnlyList<CartItemInput> Items, decimal DiscountAmount,
+public record CreateOrderRequest(IReadOnlyList<CartItemInput> Items, [property: JsonRequired] decimal DiscountAmount,
     IReadOnlyList<PaymentInput> Payments);
 
 // ----- Receipt / order result -----

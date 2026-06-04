@@ -13,7 +13,7 @@ public class MenuServiceTests(SharedTestDb fixture) : IClassFixture<SharedTestDb
     public async Task List_returns_only_active_items_by_default()
     {
         using var t = fixture.Begin();
-        await DatabaseInitializer.SeedAllAsync(t.Db);
+        await DatabaseInitializer.SeedAllOriginalAsync(t.Db);
         var svc = Build(t);
         await svc.SetActiveAsync(t.Db.MenuItems.First().Id, false);
 
@@ -26,7 +26,7 @@ public class MenuServiceTests(SharedTestDb fixture) : IClassFixture<SharedTestDb
     public async Task List_returns_inactive_items_when_flag_is_set()
     {
         using var t = fixture.Begin();
-        await DatabaseInitializer.SeedAllAsync(t.Db);
+        await DatabaseInitializer.SeedAllOriginalAsync(t.Db);
         var svc = Build(t);
         await svc.SetActiveAsync(t.Db.MenuItems.First().Id, false);
 
@@ -39,7 +39,7 @@ public class MenuServiceTests(SharedTestDb fixture) : IClassFixture<SharedTestDb
     public async Task Create_persists_item_with_recipe_and_cost()
     {
         using var t = fixture.Begin();
-        await DatabaseInitializer.SeedAllAsync(t.Db);
+        await DatabaseInitializer.SeedAllOriginalAsync(t.Db);
         var milk = t.Db.Ingredients.First(i => i.Name == "Whole Milk");       // 0.08/ml
         var cup = t.Db.Ingredients.First(i => i.Name == "Paper Cup (12oz)");  // 2.50/pc
 
@@ -59,7 +59,7 @@ public class MenuServiceTests(SharedTestDb fixture) : IClassFixture<SharedTestDb
     public async Task Create_allows_item_with_no_recipe()
     {
         using var t = fixture.Begin();
-        await DatabaseInitializer.SeedAllAsync(t.Db);
+        await DatabaseInitializer.SeedAllOriginalAsync(t.Db);
 
         var dto = await Build(t).CreateAsync(
             new MenuItemRequest("Simple Item", "Other", 50m, true, new List<RecipeLineInput>()));
@@ -73,7 +73,7 @@ public class MenuServiceTests(SharedTestDb fixture) : IClassFixture<SharedTestDb
     public async Task Update_replaces_recipe_entirely()
     {
         using var t = fixture.Begin();
-        await DatabaseInitializer.SeedAllAsync(t.Db);
+        await DatabaseInitializer.SeedAllOriginalAsync(t.Db);
         var svc = Build(t);
         var latte = t.Db.MenuItems.First(m => m.Name == "Caffe Latte");
         var sugar = t.Db.Ingredients.First(i => i.Name == "Sugar");
@@ -91,7 +91,7 @@ public class MenuServiceTests(SharedTestDb fixture) : IClassFixture<SharedTestDb
     public async Task Update_returns_null_for_missing_item()
     {
         using var t = fixture.Begin();
-        await DatabaseInitializer.SeedAllAsync(t.Db);
+        await DatabaseInitializer.SeedAllOriginalAsync(t.Db);
 
         Assert.Null(await Build(t).UpdateAsync(999_999,
             new MenuItemRequest("X", "Y", 1m, true, new List<RecipeLineInput>())));
@@ -101,7 +101,7 @@ public class MenuServiceTests(SharedTestDb fixture) : IClassFixture<SharedTestDb
     public async Task SetActive_toggles_item_visibility()
     {
         using var t = fixture.Begin();
-        await DatabaseInitializer.SeedAllAsync(t.Db);
+        await DatabaseInitializer.SeedAllOriginalAsync(t.Db);
         var latte = t.Db.MenuItems.First(m => m.Name == "Caffe Latte");
 
         Assert.True(await Build(t).SetActiveAsync(latte.Id, false));
@@ -112,7 +112,7 @@ public class MenuServiceTests(SharedTestDb fixture) : IClassFixture<SharedTestDb
     public async Task SetActive_returns_false_for_missing_item()
     {
         using var t = fixture.Begin();
-        await DatabaseInitializer.SeedAllAsync(t.Db);
+        await DatabaseInitializer.SeedAllOriginalAsync(t.Db);
 
         Assert.False(await Build(t).SetActiveAsync(999_999, true));
     }
@@ -121,7 +121,7 @@ public class MenuServiceTests(SharedTestDb fixture) : IClassFixture<SharedTestDb
     public async Task CreateModifier_persists_with_price_delta()
     {
         using var t = fixture.Begin();
-        await DatabaseInitializer.SeedAllAsync(t.Db);
+        await DatabaseInitializer.SeedAllOriginalAsync(t.Db);
 
         var mod = await Build(t).CreateModifierAsync(new ModifierRequest("Soy Milk", "Milk", 25m, true));
 
@@ -133,7 +133,7 @@ public class MenuServiceTests(SharedTestDb fixture) : IClassFixture<SharedTestDb
     public async Task UpdateModifier_changes_fields_and_returns_dto()
     {
         using var t = fixture.Begin();
-        await DatabaseInitializer.SeedAllAsync(t.Db);
+        await DatabaseInitializer.SeedAllOriginalAsync(t.Db);
         var original = t.Db.Modifiers.First(m => m.Name == "Extra Shot");
 
         var updated = await Build(t).UpdateModifierAsync(original.Id,
@@ -148,7 +148,7 @@ public class MenuServiceTests(SharedTestDb fixture) : IClassFixture<SharedTestDb
     public async Task UpdateModifier_returns_null_for_missing_modifier()
     {
         using var t = fixture.Begin();
-        await DatabaseInitializer.SeedAllAsync(t.Db);
+        await DatabaseInitializer.SeedAllOriginalAsync(t.Db);
 
         Assert.Null(await Build(t).UpdateModifierAsync(999_999,
             new ModifierRequest("X", "Y", 0m, true)));
@@ -158,7 +158,7 @@ public class MenuServiceTests(SharedTestDb fixture) : IClassFixture<SharedTestDb
     public async Task ListModifiers_excludes_inactive_by_default()
     {
         using var t = fixture.Begin();
-        await DatabaseInitializer.SeedAllAsync(t.Db);
+        await DatabaseInitializer.SeedAllOriginalAsync(t.Db);
         var svc = Build(t);
         var mod = t.Db.Modifiers.First();
         await svc.UpdateModifierAsync(mod.Id,

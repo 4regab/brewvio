@@ -22,7 +22,7 @@ namespace Brewvio.Tests;
 //       public async Task SomeTest()
 //       {
 //           using var t = fixture.Begin();   // rolls back on dispose
-//           await DatabaseInitializer.SeedAllAsync(t.Db);
+//           await DatabaseInitializer.SeedAllOriginalAsync(t.Db);
 //           ...
 //       }
 //   }

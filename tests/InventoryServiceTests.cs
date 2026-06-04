@@ -14,7 +14,7 @@ public class InventoryServiceTests(SharedTestDb fixture) : IClassFixture<SharedT
     public async Task Adjust_without_reason_is_rejected()
     {
         using var t = fixture.Begin();
-        await DatabaseInitializer.SeedAllAsync(t.Db);
+        await DatabaseInitializer.SeedAllOriginalAsync(t.Db);
         var ing = t.Db.Ingredients.First();
 
         await Assert.ThrowsAsync<ArgumentException>(() => Build(t).AdjustAsync(ing.Id, new StockAdjustRequest(50m, "  ")));
@@ -24,7 +24,7 @@ public class InventoryServiceTests(SharedTestDb fixture) : IClassFixture<SharedT
     public async Task Adjust_sets_stock_and_writes_audit_entry()
     {
         using var t = fixture.Begin();
-        await DatabaseInitializer.SeedAllAsync(t.Db);
+        await DatabaseInitializer.SeedAllOriginalAsync(t.Db);
         var ing = t.Db.Ingredients.First(i => i.Name == "Whole Milk");
 
         await Build(t).AdjustAsync(ing.Id, new StockAdjustRequest(123m, "New delivery"));
@@ -38,7 +38,7 @@ public class InventoryServiceTests(SharedTestDb fixture) : IClassFixture<SharedT
     public async Task LowStock_lists_items_at_or_below_threshold()
     {
         using var t = fixture.Begin();
-        await DatabaseInitializer.SeedAllAsync(t.Db);
+        await DatabaseInitializer.SeedAllOriginalAsync(t.Db);
         var milk = t.Db.Ingredients.First(i => i.Name == "Whole Milk");
 
         await Build(t).AdjustAsync(milk.Id, new StockAdjustRequest(100m, "Stock count"));
@@ -51,7 +51,7 @@ public class InventoryServiceTests(SharedTestDb fixture) : IClassFixture<SharedT
     public async Task Create_stores_code_category_and_derives_status()
     {
         using var t = fixture.Begin();
-        await DatabaseInitializer.SeedAllAsync(t.Db);
+        await DatabaseInitializer.SeedAllOriginalAsync(t.Db);
 
         var created = await Build(t).CreateAsync(new IngredientRequest("TEST-09", "Test Powder", "Powder", "g", 5m, 10m, 0.5m));
 
@@ -67,7 +67,7 @@ public class InventoryServiceTests(SharedTestDb fixture) : IClassFixture<SharedT
     public async Task Update_keeps_stock_and_edits_metadata()
     {
         using var t = fixture.Begin();
-        await DatabaseInitializer.SeedAllAsync(t.Db);
+        await DatabaseInitializer.SeedAllOriginalAsync(t.Db);
         var ing = t.Db.Ingredients.First(i => i.Name == "Sugar");
         var stock = ing.StockLevel;
 

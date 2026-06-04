@@ -14,7 +14,7 @@ public class UserServiceTests(SharedTestDb fixture) : IClassFixture<SharedTestDb
     public async Task Pending_list_contains_seeded_signup()
     {
         using var t = fixture.Begin();
-        await DatabaseInitializer.SeedAllAsync(t.Db);
+        await DatabaseInitializer.SeedAllOriginalAsync(t.Db);
 
         var pending = await Build(t).ListPendingAsync();
 
@@ -25,7 +25,7 @@ public class UserServiceTests(SharedTestDb fixture) : IClassFixture<SharedTestDb
     public async Task Approve_activates_pending_account()
     {
         using var t = fixture.Begin();
-        await DatabaseInitializer.SeedAllAsync(t.Db);
+        await DatabaseInitializer.SeedAllOriginalAsync(t.Db);
         var users = Build(t);
         var pending = t.Db.Users.First(u => u.Username == "newcashier");
 
@@ -40,7 +40,7 @@ public class UserServiceTests(SharedTestDb fixture) : IClassFixture<SharedTestDb
     public async Task Approving_a_non_pending_account_throws()
     {
         using var t = fixture.Begin();
-        await DatabaseInitializer.SeedAllAsync(t.Db);
+        await DatabaseInitializer.SeedAllOriginalAsync(t.Db);
         var manager = t.Db.Users.First(u => u.Username == "manager");
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => Build(t).ApproveAsync(manager.Id));
@@ -50,7 +50,7 @@ public class UserServiceTests(SharedTestDb fixture) : IClassFixture<SharedTestDb
     public async Task Reject_marks_account_rejected()
     {
         using var t = fixture.Begin();
-        await DatabaseInitializer.SeedAllAsync(t.Db);
+        await DatabaseInitializer.SeedAllOriginalAsync(t.Db);
         var pending = t.Db.Users.First(u => u.Username == "newcashier");
 
         var dto = await Build(t).RejectAsync(pending.Id);
@@ -63,7 +63,7 @@ public class UserServiceTests(SharedTestDb fixture) : IClassFixture<SharedTestDb
     public async Task Create_adds_active_account_with_correct_role()
     {
         using var t = fixture.Begin();
-        await DatabaseInitializer.SeedAllAsync(t.Db);
+        await DatabaseInitializer.SeedAllOriginalAsync(t.Db);
 
         var dto = await Build(t).CreateAsync(new CreateUserRequest("barista", "Barista Joe", "P@ssword1", "Cashier"));
 
@@ -78,7 +78,7 @@ public class UserServiceTests(SharedTestDb fixture) : IClassFixture<SharedTestDb
     public async Task Create_throws_on_duplicate_username()
     {
         using var t = fixture.Begin();
-        await DatabaseInitializer.SeedAllAsync(t.Db);
+        await DatabaseInitializer.SeedAllOriginalAsync(t.Db);
 
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
             Build(t).CreateAsync(new CreateUserRequest("manager", "Imposter", "P@ssword1", "Cashier")));
@@ -88,7 +88,7 @@ public class UserServiceTests(SharedTestDb fixture) : IClassFixture<SharedTestDb
     public async Task Update_changes_fullname_and_role()
     {
         using var t = fixture.Begin();
-        await DatabaseInitializer.SeedAllAsync(t.Db);
+        await DatabaseInitializer.SeedAllOriginalAsync(t.Db);
         var cashier = t.Db.Users.First(u => u.Username == "cashier");
 
         var dto = await Build(t).UpdateAsync(cashier.Id, new UpdateUserRequest("Senior Cashier", "Cashier", true));
@@ -101,7 +101,7 @@ public class UserServiceTests(SharedTestDb fixture) : IClassFixture<SharedTestDb
     public async Task Update_returns_null_for_missing_user()
     {
         using var t = fixture.Begin();
-        await DatabaseInitializer.SeedAllAsync(t.Db);
+        await DatabaseInitializer.SeedAllOriginalAsync(t.Db);
 
         Assert.Null(await Build(t).UpdateAsync(999_999, new UpdateUserRequest("X", "Cashier", true)));
     }
@@ -110,7 +110,7 @@ public class UserServiceTests(SharedTestDb fixture) : IClassFixture<SharedTestDb
     public async Task ResetPassword_updates_hash_so_new_password_works()
     {
         using var t = fixture.Begin();
-        await DatabaseInitializer.SeedAllAsync(t.Db);
+        await DatabaseInitializer.SeedAllOriginalAsync(t.Db);
         var cashier = t.Db.Users.First(u => u.Username == "cashier");
 
         var ok = await Build(t).ResetPasswordAsync(cashier.Id, "NewP@ss1");
@@ -126,7 +126,7 @@ public class UserServiceTests(SharedTestDb fixture) : IClassFixture<SharedTestDb
     public async Task ResetPassword_rejects_too_short_password()
     {
         using var t = fixture.Begin();
-        await DatabaseInitializer.SeedAllAsync(t.Db);
+        await DatabaseInitializer.SeedAllOriginalAsync(t.Db);
         var cashier = t.Db.Users.First(u => u.Username == "cashier");
 
         await Assert.ThrowsAsync<ArgumentException>(() =>
@@ -137,7 +137,7 @@ public class UserServiceTests(SharedTestDb fixture) : IClassFixture<SharedTestDb
     public async Task ResetPassword_returns_false_for_missing_user()
     {
         using var t = fixture.Begin();
-        await DatabaseInitializer.SeedAllAsync(t.Db);
+        await DatabaseInitializer.SeedAllOriginalAsync(t.Db);
 
         Assert.False(await Build(t).ResetPasswordAsync(999_999, "P@ssword1!"));
     }

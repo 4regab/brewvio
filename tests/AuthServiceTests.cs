@@ -14,7 +14,7 @@ public class AuthServiceTests(SharedTestDb fixture) : IClassFixture<SharedTestDb
     public async Task Valid_credentials_return_token_and_role()
     {
         using var t = fixture.Begin();
-        await DatabaseInitializer.SeedAllAsync(t.Db);
+        await DatabaseInitializer.SeedAllOriginalAsync(t.Db);
 
         var result = await Build(t).LoginAsync("manager", "Manager@123");
 
@@ -28,7 +28,7 @@ public class AuthServiceTests(SharedTestDb fixture) : IClassFixture<SharedTestDb
     public async Task Wrong_password_is_rejected()
     {
         using var t = fixture.Begin();
-        await DatabaseInitializer.SeedAllAsync(t.Db);
+        await DatabaseInitializer.SeedAllOriginalAsync(t.Db);
 
         var result = await Build(t).LoginAsync("manager", "wrong-password");
         Assert.Null(result.Response);
@@ -39,7 +39,7 @@ public class AuthServiceTests(SharedTestDb fixture) : IClassFixture<SharedTestDb
     public async Task Inactive_user_cannot_sign_in()
     {
         using var t = fixture.Begin();
-        await DatabaseInitializer.SeedAllAsync(t.Db);
+        await DatabaseInitializer.SeedAllOriginalAsync(t.Db);
         var cashier = t.Db.Users.First(u => u.Username == "cashier");
         cashier.IsActive = false;
         cashier.Status = UserStatus.Rejected;
@@ -54,7 +54,7 @@ public class AuthServiceTests(SharedTestDb fixture) : IClassFixture<SharedTestDb
     public async Task Pending_account_cannot_sign_in_with_clear_message()
     {
         using var t = fixture.Begin();
-        await DatabaseInitializer.SeedAllAsync(t.Db);
+        await DatabaseInitializer.SeedAllOriginalAsync(t.Db);
 
         var result = await Build(t).LoginAsync("newcashier", "Pending@123");
 
@@ -66,7 +66,7 @@ public class AuthServiceTests(SharedTestDb fixture) : IClassFixture<SharedTestDb
     public async Task Register_creates_a_pending_account()
     {
         using var t = fixture.Begin();
-        await DatabaseInitializer.SeedAllAsync(t.Db);
+        await DatabaseInitializer.SeedAllOriginalAsync(t.Db);
         var auth = Build(t);
 
         var res = await auth.RegisterAsync(new RegisterRequest("jamie", "Jamie Cruz", "secret123", "Cashier"));
@@ -81,7 +81,7 @@ public class AuthServiceTests(SharedTestDb fixture) : IClassFixture<SharedTestDb
     public async Task Register_rejects_duplicate_username()
     {
         using var t = fixture.Begin();
-        await DatabaseInitializer.SeedAllAsync(t.Db);
+        await DatabaseInitializer.SeedAllOriginalAsync(t.Db);
 
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
             Build(t).RegisterAsync(new RegisterRequest("manager", "Imposter", "secret123", "Manager")));
@@ -91,7 +91,7 @@ public class AuthServiceTests(SharedTestDb fixture) : IClassFixture<SharedTestDb
     public async Task Register_rejects_short_password()
     {
         using var t = fixture.Begin();
-        await DatabaseInitializer.SeedAllAsync(t.Db);
+        await DatabaseInitializer.SeedAllOriginalAsync(t.Db);
 
         await Assert.ThrowsAsync<ArgumentException>(() =>
             Build(t).RegisterAsync(new RegisterRequest("shorty", "Short Pw", "123", "Cashier")));
@@ -101,7 +101,7 @@ public class AuthServiceTests(SharedTestDb fixture) : IClassFixture<SharedTestDb
     public async Task Approved_account_can_sign_in()
     {
         using var t = fixture.Begin();
-        await DatabaseInitializer.SeedAllAsync(t.Db);
+        await DatabaseInitializer.SeedAllOriginalAsync(t.Db);
         var auth = Build(t);
         var users = new UserService(t.Db, new AuditService(t.Db, TestSupport.Cur(1, "manager", "Manager")));
 
@@ -117,7 +117,7 @@ public class AuthServiceTests(SharedTestDb fixture) : IClassFixture<SharedTestDb
     public async Task Rejected_account_cannot_sign_in()
     {
         using var t = fixture.Begin();
-        await DatabaseInitializer.SeedAllAsync(t.Db);
+        await DatabaseInitializer.SeedAllOriginalAsync(t.Db);
         var auth = Build(t);
         var users = new UserService(t.Db, new AuditService(t.Db, TestSupport.Cur(1, "manager", "Manager")));
 
@@ -133,7 +133,7 @@ public class AuthServiceTests(SharedTestDb fixture) : IClassFixture<SharedTestDb
     public async Task GetAccountStatus_returns_null_for_unknown_username()
     {
         using var t = fixture.Begin();
-        await DatabaseInitializer.SeedAllAsync(t.Db);
+        await DatabaseInitializer.SeedAllOriginalAsync(t.Db);
 
         Assert.Null(await Build(t).GetAccountStatusAsync("does-not-exist"));
     }
@@ -142,7 +142,7 @@ public class AuthServiceTests(SharedTestDb fixture) : IClassFixture<SharedTestDb
     public async Task GetAccountStatus_reflects_approval_transition()
     {
         using var t = fixture.Begin();
-        await DatabaseInitializer.SeedAllAsync(t.Db);
+        await DatabaseInitializer.SeedAllOriginalAsync(t.Db);
         var auth = Build(t);
         var users = new UserService(t.Db, new AuditService(t.Db, TestSupport.Cur(1, "manager", "Manager")));
 

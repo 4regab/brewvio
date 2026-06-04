@@ -18,7 +18,7 @@ public class ReportingServiceTests(SharedTestDb fixture) : IClassFixture<SharedT
     public async Task Report_aggregates_sales_and_menu_performance()
     {
         using var t = fixture.Begin();
-        await DatabaseInitializer.SeedAllAsync(t.Db);
+        await DatabaseInitializer.SeedAllOriginalAsync(t.Db);
         var orders = BuildOrders(t);
         var latte = t.Db.MenuItems.First(m => m.Name == "Caffe Latte");
 
@@ -39,7 +39,7 @@ public class ReportingServiceTests(SharedTestDb fixture) : IClassFixture<SharedT
     public async Task Report_includes_margin_best_sellers_and_category_breakdown()
     {
         using var t = fixture.Begin();
-        await DatabaseInitializer.SeedAllAsync(t.Db);
+        await DatabaseInitializer.SeedAllOriginalAsync(t.Db);
         var orders = BuildOrders(t);
         var latte = t.Db.MenuItems.First(m => m.Name == "Caffe Latte");
         var espresso = t.Db.MenuItems.First(m => m.Name == "Espresso");
@@ -66,7 +66,7 @@ public class ReportingServiceTests(SharedTestDb fixture) : IClassFixture<SharedT
     public async Task Report_period_buckets_trend_by_month()
     {
         using var t = fixture.Begin();
-        await DatabaseInitializer.SeedAllAsync(t.Db);
+        await DatabaseInitializer.SeedAllOriginalAsync(t.Db);
         var orders = BuildOrders(t);
         var latte = t.Db.MenuItems.First(m => m.Name == "Caffe Latte");
 

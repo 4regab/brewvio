@@ -14,11 +14,11 @@ public class SettingsServiceTests(SharedTestDb fixture) : IClassFixture<SharedTe
     public async Task GetAsync_returns_seeded_defaults()
     {
         using var t = fixture.Begin();
-        await DatabaseInitializer.SeedAllAsync(t.Db);
+        await DatabaseInitializer.SeedAllOriginalAsync(t.Db);
 
         var s = await Build(t).GetAsync();
 
-        Assert.Equal("Brewvio Coffee", s.StoreName);
+        Assert.Equal("Chao & Brew", s.StoreName);
         Assert.Equal("PHP", s.Currency);
         Assert.Equal(12m, s.TaxRatePercent);
     }
@@ -27,7 +27,7 @@ public class SettingsServiceTests(SharedTestDb fixture) : IClassFixture<SharedTe
     public async Task UpdateAsync_persists_all_fields()
     {
         using var t = fixture.Begin();
-        await DatabaseInitializer.SeedAllAsync(t.Db);
+        await DatabaseInitializer.SeedAllOriginalAsync(t.Db);
 
         await Build(t).UpdateAsync(new StoreSettingsDto("New Name", "New Address", "USD", 8.5m));
 
@@ -41,7 +41,7 @@ public class SettingsServiceTests(SharedTestDb fixture) : IClassFixture<SharedTe
     public async Task UpdateAsync_is_idempotent_on_repeated_calls()
     {
         using var t = fixture.Begin();
-        await DatabaseInitializer.SeedAllAsync(t.Db);
+        await DatabaseInitializer.SeedAllOriginalAsync(t.Db);
         var svc = Build(t);
         var dto = new StoreSettingsDto("Shop A", "Addr", "PHP", 10m);
 
@@ -55,7 +55,7 @@ public class SettingsServiceTests(SharedTestDb fixture) : IClassFixture<SharedTe
     public async Task GetTaxRateAsync_matches_stored_value()
     {
         using var t = fixture.Begin();
-        await DatabaseInitializer.SeedAllAsync(t.Db);
+        await DatabaseInitializer.SeedAllOriginalAsync(t.Db);
 
         Assert.Equal(12m, await Build(t).GetTaxRateAsync());
     }
@@ -73,7 +73,7 @@ public class SettingsServiceTests(SharedTestDb fixture) : IClassFixture<SharedTe
     public async Task ExportBackupAsync_projects_users_without_password_hashes()
     {
         using var t = fixture.Begin();
-        await DatabaseInitializer.SeedAllAsync(t.Db);
+        await DatabaseInitializer.SeedAllOriginalAsync(t.Db);
 
         var backup = await Build(t).ExportBackupAsync();
 
