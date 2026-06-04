@@ -78,7 +78,7 @@ window.Views = window.Views || {};
     if (k === 'food') return 'bi-egg-fried';
     if (k === 'cold brew coffee') return 'bi-cup-hot-fill';
     if (k === 'non-coffee') return 'bi-droplet';
-    if (k === 'matcha series') return 'bi-leaf';
+    if (k.includes('matcha')) return 'bi-flower2';
     if (k === 'frappe') return 'bi-cup-straw';
     if (k === 'fruit soda') return 'bi-cup-straw';
     if (k.includes('noodle') || k.includes('qik')) return 'bi-box2';
