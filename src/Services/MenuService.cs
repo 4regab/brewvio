@@ -10,7 +10,7 @@ public class MenuService(BrewvioDbContext db, AuditService audit)
 {
     public async Task<List<MenuItemDto>> ListAsync(bool includeInactive = false)
     {
-        var q = db.MenuItems.Include(m => m.Recipe).ThenInclude(r => r.Ingredient).AsQueryable();
+        var q = db.MenuItems.AsNoTracking().Include(m => m.Recipe).ThenInclude(r => r.Ingredient).AsQueryable();
         if (!includeInactive) q = q.Where(m => m.IsActive);
         var items = await q.OrderBy(m => m.Category).ThenBy(m => m.Name).ToListAsync();
         return items.Select(ToDto).ToList();

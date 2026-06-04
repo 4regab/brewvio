@@ -140,7 +140,7 @@ public class OrderService(BrewvioDbContext db, CurrentUser current, AuditService
         audit.LogAsync("OrderCancelled", string.IsNullOrWhiteSpace(reason) ? "(no reason given)" : reason);
 
     public async Task<List<TransactionSummaryDto>> RecentAsync(int take = 50) =>
-        await db.Transactions.OrderByDescending(t => t.Timestamp).Take(take)
+        await db.Transactions.AsNoTracking().OrderByDescending(t => t.Timestamp).Take(take)
             .Select(t => new TransactionSummaryDto(t.Id, t.Timestamp, t.TotalAmount, t.PaymentMethod, t.Status,
                 t.Cashier.FullName != "" ? t.Cashier.FullName : t.Cashier.Username, t.Items.Count))
             .ToListAsync();

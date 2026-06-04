@@ -21,12 +21,24 @@ public class SettingsService(BrewvioDbContext db, AuditService audit)
             decimal.TryParse(map.GetValueOrDefault(TaxRate), out var t) ? t : 0m);
     }
 
+    // skill: optimizing-ef-core-queries — replaced 4 sequential FindAsync calls (one per key)
+    // with a single WHERE ... IN query, then upsert in memory before one SaveChangesAsync.
     public async Task<StoreSettingsDto> UpdateAsync(StoreSettingsDto dto)
     {
-        await SetAsync(StoreName, dto.StoreName);
-        await SetAsync(Address, dto.Address);
-        await SetAsync(Currency, dto.Currency);
-        await SetAsync(TaxRate, dto.TaxRatePercent.ToString("0.####"));
+        var keys = new[] { StoreName, Address, Currency, TaxRate };
+        var existing = await db.Settings.Where(s => keys.Contains(s.Key))
+            .ToDictionaryAsync(s => s.Key);
+
+        void Upsert(string key, string value)
+        {
+            if (existing.TryGetValue(key, out var row)) row.Value = value;
+            else db.Settings.Add(new AppSetting { Key = key, Value = value });
+        }
+
+        Upsert(StoreName, dto.StoreName);
+        Upsert(Address, dto.Address);
+        Upsert(Currency, dto.Currency);
+        Upsert(TaxRate, dto.TaxRatePercent.ToString("0.####"));
         audit.Add("SettingsUpdated", $"Store='{dto.StoreName}', Tax={dto.TaxRatePercent}%, Currency={dto.Currency}");
         await db.SaveChangesAsync();
         return dto;
@@ -36,6 +48,7 @@ public class SettingsService(BrewvioDbContext db, AuditService audit)
         decimal.TryParse((await db.Settings.FindAsync(TaxRate))?.Value, out var t) ? t : 0m;
 
     // "USB backup" adapted to the web stack: a downloadable JSON snapshot of core tables.
+    // Users are projected explicitly (Id/Username/FullName/Role/IsActive) to avoid leaking PasswordHash.
     public async Task<object> ExportBackupAsync() => new
     {
         exportedAt = DateTime.UtcNow,
@@ -47,11 +60,4 @@ public class SettingsService(BrewvioDbContext db, AuditService audit)
         auditLogs = await db.AuditLogs.ToListAsync(),
         settings = await db.Settings.ToListAsync()
     };
-
-    private async Task SetAsync(string key, string value)
-    {
-        var row = await db.Settings.FindAsync(key);
-        if (row is null) db.Settings.Add(new AppSetting { Key = key, Value = value });
-        else row.Value = value;
-    }
 }

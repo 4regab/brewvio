@@ -5,15 +5,15 @@ using Brewvio.Services;
 
 namespace Brewvio.Tests;
 
-public class AuthServiceTests
+public class AuthServiceTests(SharedTestDb fixture) : IClassFixture<SharedTestDb>
 {
-    private static AuthService Build(TestDb t) =>
+    private static AuthService Build(TestScope t) =>
         new(t.Db, TestSupport.Config(), new AuditService(t.Db, TestSupport.Cur(0, "system", "")));
 
     [Fact]
     public async Task Valid_credentials_return_token_and_role()
     {
-        using var t = new TestDb();
+        using var t = fixture.Begin();
         await DatabaseInitializer.SeedAllAsync(t.Db);
 
         var result = await Build(t).LoginAsync("manager", "Manager@123");
@@ -27,7 +27,7 @@ public class AuthServiceTests
     [Fact]
     public async Task Wrong_password_is_rejected()
     {
-        using var t = new TestDb();
+        using var t = fixture.Begin();
         await DatabaseInitializer.SeedAllAsync(t.Db);
 
         var result = await Build(t).LoginAsync("manager", "wrong-password");
@@ -38,7 +38,7 @@ public class AuthServiceTests
     [Fact]
     public async Task Inactive_user_cannot_sign_in()
     {
-        using var t = new TestDb();
+        using var t = fixture.Begin();
         await DatabaseInitializer.SeedAllAsync(t.Db);
         var cashier = t.Db.Users.First(u => u.Username == "cashier");
         cashier.IsActive = false;
@@ -53,10 +53,9 @@ public class AuthServiceTests
     [Fact]
     public async Task Pending_account_cannot_sign_in_with_clear_message()
     {
-        using var t = new TestDb();
+        using var t = fixture.Begin();
         await DatabaseInitializer.SeedAllAsync(t.Db);
 
-        // The seeded "newcashier" is Pending.
         var result = await Build(t).LoginAsync("newcashier", "Pending@123");
 
         Assert.Null(result.Response);
@@ -66,7 +65,7 @@ public class AuthServiceTests
     [Fact]
     public async Task Register_creates_a_pending_account()
     {
-        using var t = new TestDb();
+        using var t = fixture.Begin();
         await DatabaseInitializer.SeedAllAsync(t.Db);
         var auth = Build(t);
 
@@ -75,36 +74,33 @@ public class AuthServiceTests
         Assert.Equal("Pending", res.Status);
         var status = await auth.GetAccountStatusAsync("jamie");
         Assert.Equal("Pending", status!.Status);
-        // A pending account cannot sign in yet.
         Assert.Null((await auth.LoginAsync("jamie", "secret123")).Response);
     }
 
     [Fact]
     public async Task Register_rejects_duplicate_username()
     {
-        using var t = new TestDb();
+        using var t = fixture.Begin();
         await DatabaseInitializer.SeedAllAsync(t.Db);
-        var auth = Build(t);
 
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            auth.RegisterAsync(new RegisterRequest("manager", "Imposter", "secret123", "Manager")));
+            Build(t).RegisterAsync(new RegisterRequest("manager", "Imposter", "secret123", "Manager")));
     }
 
     [Fact]
     public async Task Register_rejects_short_password()
     {
-        using var t = new TestDb();
+        using var t = fixture.Begin();
         await DatabaseInitializer.SeedAllAsync(t.Db);
-        var auth = Build(t);
 
         await Assert.ThrowsAsync<ArgumentException>(() =>
-            auth.RegisterAsync(new RegisterRequest("shorty", "Short Pw", "123", "Cashier")));
+            Build(t).RegisterAsync(new RegisterRequest("shorty", "Short Pw", "123", "Cashier")));
     }
 
     [Fact]
     public async Task Approved_account_can_sign_in()
     {
-        using var t = new TestDb();
+        using var t = fixture.Begin();
         await DatabaseInitializer.SeedAllAsync(t.Db);
         var auth = Build(t);
         var users = new UserService(t.Db, new AuditService(t.Db, TestSupport.Cur(1, "manager", "Manager")));
@@ -120,7 +116,7 @@ public class AuthServiceTests
     [Fact]
     public async Task Rejected_account_cannot_sign_in()
     {
-        using var t = new TestDb();
+        using var t = fixture.Begin();
         await DatabaseInitializer.SeedAllAsync(t.Db);
         var auth = Build(t);
         var users = new UserService(t.Db, new AuditService(t.Db, TestSupport.Cur(1, "manager", "Manager")));
@@ -131,5 +127,29 @@ public class AuthServiceTests
         var result = await auth.LoginAsync("jamie", "secret123");
         Assert.Null(result.Response);
         Assert.Contains("declined", result.Error, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task GetAccountStatus_returns_null_for_unknown_username()
+    {
+        using var t = fixture.Begin();
+        await DatabaseInitializer.SeedAllAsync(t.Db);
+
+        Assert.Null(await Build(t).GetAccountStatusAsync("does-not-exist"));
+    }
+
+    [Fact]
+    public async Task GetAccountStatus_reflects_approval_transition()
+    {
+        using var t = fixture.Begin();
+        await DatabaseInitializer.SeedAllAsync(t.Db);
+        var auth = Build(t);
+        var users = new UserService(t.Db, new AuditService(t.Db, TestSupport.Cur(1, "manager", "Manager")));
+
+        var reg = await auth.RegisterAsync(new RegisterRequest("statustest", "Status Tester", "secret123", "Cashier"));
+        Assert.Equal("Pending", (await auth.GetAccountStatusAsync("statustest"))!.Status);
+
+        await users.ApproveAsync(reg.Id);
+        Assert.Equal("Active", (await auth.GetAccountStatusAsync("statustest"))!.Status);
     }
 }

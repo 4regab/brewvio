@@ -10,12 +10,12 @@ namespace Brewvio.Services;
 public class UserService(BrewvioDbContext db, AuditService audit)
 {
     public async Task<List<UserDto>> ListAsync() =>
-        await db.Users.OrderBy(u => u.Username)
+        await db.Users.AsNoTracking().OrderBy(u => u.Username)
             .Select(u => new UserDto(u.Id, u.Username, u.FullName, u.Role, u.IsActive, u.Status, u.CreatedAt)).ToListAsync();
 
     // Pending sign-ups awaiting a Manager decision (registration/approval workflow).
     public async Task<List<PendingUserDto>> ListPendingAsync() =>
-        await db.Users.Where(u => u.Status == UserStatus.Pending).OrderBy(u => u.CreatedAt)
+        await db.Users.AsNoTracking().Where(u => u.Status == UserStatus.Pending).OrderBy(u => u.CreatedAt)
             .Select(u => new PendingUserDto(u.Id, u.Username, u.FullName, u.Role, u.CreatedAt)).ToListAsync();
 
     // Approve a pending account -> Active + can sign in.
@@ -83,8 +83,8 @@ public class UserService(BrewvioDbContext db, AuditService audit)
 
     public async Task<bool> ResetPasswordAsync(int id, string newPassword)
     {
-        if (string.IsNullOrWhiteSpace(newPassword) || newPassword.Length < 6)
-            throw new ArgumentException("Password must be at least 6 characters.");
+        if (string.IsNullOrWhiteSpace(newPassword) || newPassword.Length < 8)
+            throw new ArgumentException("Password must be at least 8 characters.");
         var user = await db.Users.FindAsync(id);
         if (user is null) return false;
         user.PasswordHash = PasswordHasher.Hash(newPassword);

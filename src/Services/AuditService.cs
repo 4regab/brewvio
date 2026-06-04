@@ -28,7 +28,7 @@ public class AuditService(BrewvioDbContext db, CurrentUser current)
     }
 
     public async Task<List<AuditLogDto>> ListAsync(int take = 200) =>
-        await db.AuditLogs.OrderByDescending(a => a.Timestamp).Take(take)
+        await db.AuditLogs.AsNoTracking().OrderByDescending(a => a.Timestamp).Take(take)
             .Select(a => new AuditLogDto(a.Id, a.Timestamp, a.Username, a.Action, a.Details))
             .ToListAsync();
 }

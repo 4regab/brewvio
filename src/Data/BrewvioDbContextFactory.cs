@@ -11,7 +11,7 @@ public class BrewvioDbContextFactory : IDesignTimeDbContextFactory<BrewvioDbCont
     {
         // `migrations add` never connects, but `database update` does — honor the same
         // ConnectionStrings__Default / DATABASE_URL overrides the app uses, falling back to
-        // the local default. (Local dev Postgres runs on 5433; see scripts/pg-setup.sh.)
+        // the local default (local dev Postgres runs on port 5433; see DEPLOYMENT.md §2a).
         var cs = Environment.GetEnvironmentVariable("ConnectionStrings__Default")
             ?? Environment.GetEnvironmentVariable("DATABASE_URL")
             ?? "Host=localhost;Port=5433;Database=brewvio;Username=postgres;Password=postgres";

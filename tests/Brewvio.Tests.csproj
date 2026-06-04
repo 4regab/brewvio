@@ -23,7 +23,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\Brewvio\Brewvio.csproj" />
+    <ProjectReference Include="..\src\Brewvio.csproj" />
   </ItemGroup>
 
   <ItemGroup>

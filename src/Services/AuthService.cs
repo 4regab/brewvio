@@ -74,8 +74,7 @@ public class AuthService(BrewvioDbContext db, IConfiguration config, AuditServic
     // Lets the "Authenticating…" screen poll for an approval decision (no token, no PII).
     public async Task<AccountStatusResponse?> GetAccountStatusAsync(string username)
     {
-        var user = await db.Users.AsNoTracking().SingleOrDefaultAsync(u => u.Username == username);
-        return user is null ? null : new AccountStatusResponse(user.Username, user.Status);
+        var user = await db.Users.AsNoTracking().SingleOrDefaultAsync(u => u.Username == username);        return user is null ? null : new AccountStatusResponse(user.Username, user.Status);
     }
 
     private string IssueToken(User user)

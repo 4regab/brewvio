@@ -77,7 +77,7 @@ Any existing local Postgres works too — just point `ConnectionStrings__Default
 
 ```bash
 # Uses ConnectionStrings__Default / DATABASE_URL, falling back to localhost:5433
-dotnet ef database update --project src/Brewvio
+dotnet ef database update --project Brewvio
 ```
 
 This includes the `EnableRowLevelSecurity` migration (see §5). It is written to be a safe
@@ -88,7 +88,7 @@ but the role-specific statements are skipped.
 ### 2c. Run the API + SPA
 
 ```bash
-dotnet run --project src/Brewvio
+dotnet run --project Brewvio
 ```
 
 The app serves the SPA from `wwwroot/` and the API under `/api/*` on
@@ -179,7 +179,7 @@ sam deploy --guided
 ### Publish the frontend
 
 ```bash
-aws s3 sync src/Brewvio/wwwroot/ s3://<FrontendBucketName>/ --delete
+aws s3 sync Brewvio/wwwroot/ s3://<FrontendBucketName>/ --delete
 # Invalidate the CDN cache so the new SPA is served immediately:
 aws cloudfront create-invalidation --distribution-id <id> --paths "/*"
 ```
@@ -195,7 +195,7 @@ Run migrations with the **session-mode** pooler (port `5432`), then point the ru
 
 ```bash
 ConnectionStrings__Default='Host=db.<ref>.supabase.co;Port=5432;Database=postgres;Username=postgres;Password=<pass>;SSL Mode=Require' \
-  dotnet ef database update --project src/Brewvio
+  dotnet ef database update --project Brewvio
 ```
 
 ### Alternative: `dotnet lambda` (without SAM)
@@ -203,7 +203,7 @@ ConnectionStrings__Default='Host=db.<ref>.supabase.co;Port=5432;Database=postgre
 The project is also `dotnet lambda`-compatible (`AWSProjectType=Lambda`):
 
 ```bash
-dotnet lambda deploy-function --project-location src/Brewvio
+dotnet lambda deploy-function --project-location Brewvio
 ```
 
 ### Backup & disaster recovery
@@ -253,7 +253,7 @@ Apply it like any other migration (session-mode pooler, port `5432`):
 
 ```bash
 ConnectionStrings__Default='Host=db.<ref>.supabase.co;Port=5432;Database=postgres;Username=postgres;Password=<pass>;SSL Mode=Require' \
-  dotnet ef database update --project src/Brewvio
+  dotnet ef database update --project Brewvio
 ```
 
 **Important caveats:**

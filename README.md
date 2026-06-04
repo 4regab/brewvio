@@ -47,7 +47,7 @@ auto-generated PostgREST data API so the public API key can't reach the tables d
 
 ```
 template.yaml                  AWS SAM infrastructure (Lambda + API Gateway + S3 + CloudFront)
-src/Brewvio/
+Brewvio/
 ├── Program.cs                 App entry point (host, DI, Lambda hosting, middleware)
 ├── appsettings.json           Config (connection string, JWT issuer/audience, logging)
 ├── Properties/                launchSettings.json (local dev profile, http://localhost:5000)
@@ -60,12 +60,12 @@ src/Brewvio/
 ├── Helpers/                   CurrentUser, PasswordHasher, ExportHelper
 └── wwwroot/                   Static frontend (HTML/CSS/JS) deployed to S3 + CloudFront
 
-tests/Brewvio.Tests/           xUnit service tests (Auth, User, Inventory, Order, Reporting, Shift)
+Brewvio.Tests/                 xUnit service tests (Auth, User, Inventory, Order, Reporting, Shift)
 ```
 
 The API runs in Lambda via `Amazon.Lambda.AspNetCoreServer.Hosting`; the static frontend in
 `wwwroot/` is uploaded to S3 and served through CloudFront. Backend tests live in
-`tests/Brewvio.Tests/` (xUnit against a real PostgreSQL, run with `dotnet test`).
+`Brewvio.Tests/` (xUnit against a real PostgreSQL, run with `dotnet test`).
 
 ## Getting Started
 
@@ -76,12 +76,12 @@ running app, session mode (port `5432`) for EF Core migrations.
 
 ```bash
 # Restore & run locally
-dotnet run --project src/Brewvio
+dotnet run --project Brewvio
 
 # Database migrations (EF Core) — use the session-mode (:5432) connection string
 dotnet tool install --global dotnet-ef        # once
-dotnet ef migrations add InitialCreate --project src/Brewvio
-dotnet ef database update --project src/Brewvio
+dotnet ef migrations add InitialCreate --project Brewvio
+dotnet ef database update --project Brewvio
 ```
 
 ### Deploy to AWS

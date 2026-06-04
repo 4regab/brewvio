@@ -9,10 +9,10 @@ namespace Brewvio.Services;
 public class InventoryService(BrewvioDbContext db, AuditService audit)
 {
     public async Task<List<IngredientDto>> ListAsync() =>
-        ToDtos(await db.Ingredients.OrderBy(i => i.Name).ToListAsync());
+        ToDtos(await db.Ingredients.AsNoTracking().OrderBy(i => i.Name).ToListAsync());
 
     public async Task<List<IngredientDto>> LowStockAsync() =>
-        ToDtos(await db.Ingredients.Where(i => i.StockLevel <= i.Threshold).OrderBy(i => i.Name).ToListAsync());
+        ToDtos(await db.Ingredients.AsNoTracking().Where(i => i.StockLevel <= i.Threshold).OrderBy(i => i.Name).ToListAsync());
 
     public async Task<IngredientDto> CreateAsync(IngredientRequest r)
     {
