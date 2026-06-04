@@ -49,21 +49,30 @@ if (!string.IsNullOrEmpty(databaseUrl))
         // Supabase Supavisor transaction pooler does not support server-side prepared
         // statements; disabling them prevents "Timeout during reading attempt" hangs on writes.
         MaxAutoPrepare = 0,
-        // Short connect timeout so cold-start DB issues fail fast instead of hanging the Lambda.
-        Timeout = 15,
+        // Disable Npgsql's CLIENT-side pool. On Lambda the process is frozen between invocations,
+        // so a pooled connection goes stale (Supavisor reclaims the server side) and the next
+        // query hangs until CommandTimeout -> "Timeout during reading attempt" 22s stalls. Supavisor
+        // IS the connection pool, so each invocation opening a fresh connection to it is the intended
+        // serverless pattern and removes the stale-socket hang entirely.
+        Pooling = false,
+        // Fail fast on a stalled pooler connection so a bad connect surfaces quickly
+        // instead of hanging the synchronous request (the retry policy below adds bounded retries).
+        Timeout = 8,
         CommandTimeout = 20
     }.ConnectionString;
 }
 
 builder.Services.AddControllers();
 builder.Services.AddDbContext<BrewvioDbContext>(options =>
-    // EnableRetryOnFailure: transparently retries transient pooler/network errors (Supavisor can
-    // drop connections) instead of surfacing them as 500s. Multi-step writes use the provider's
-    // execution strategy (see OrderService) so they compose with the retry policy.
+    // EnableRetryOnFailure: retries genuine transient pooler/network drops instead of surfacing
+    // them as 500s. Kept deliberately small (2 retries, 2s max backoff) so a slow cold-start
+    // connection can't stack into a 20s+ synchronous wait that blows past the 30s API Gateway
+    // timeout. Multi-step writes use the provider's execution strategy (see OrderService) so they
+    // compose with the retry policy.
     options.UseNpgsql(connectionString, npgsql =>
         npgsql.EnableRetryOnFailure(
-            maxRetryCount: 3,
-            maxRetryDelay: TimeSpan.FromSeconds(5),
+            maxRetryCount: 2,
+            maxRetryDelay: TimeSpan.FromSeconds(2),
             errorCodesToAdd: null)));
 
 // JWT auth: the app issues and validates its own HMAC-signed tokens (role claim = "role").
