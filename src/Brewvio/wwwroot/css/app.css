@@ -1,0 +1,645 @@
+/* ============================================================
+   Brewvio — Design System
+   Font: Anonymous Pro (monospace)
+   Palette: Brown navbar #3f2b1f | Card bg #2a1b11 (dark glass)
+            Page bg #c8bfb0 (warm grey) | Accent #b16514 (caramel)
+   Shape: cards 18px | inputs 50px pill | buttons 25px
+   ============================================================ */
+
+/* ---------- Google Font ---------- */
+@import url('https://fonts.googleapis.com/css2?family=Anonymous+Pro:ital,wght@0,400;0,700;1,400;1,700&display=swap');
+
+:root {
+  /* Core palette from Figma */
+  --brew-navbar:   #3f2b1f;
+  --brew-navbar-90: rgba(63,43,31,0.9);
+  --brew-card:     #2a1b11;        /* dark card bg */
+  --brew-card-80:  rgba(42,27,17,0.82);
+  --brew-page:     #c8bfb0;        /* warm-grey page bg */
+  --brew-surface:  #ffffff;
+  --brew-accent:   #b16514;        /* caramel orange */
+  --brew-accent-d: #8c4e0e;
+  --brew-line:     rgba(255,255,255,0.12);
+  --brew-line-dark: #e0d5c4;
+  --brew-ink:      #23231f;
+  --brew-muted:    #7a6d60;
+  --brew-white70:  rgba(255,255,255,0.7);
+  --brew-white40:  rgba(255,255,255,0.4);
+  --brew-placeholder: #909090;
+
+  /* Shapes */
+  --r-card:   18px;
+  --r-input:  50px;   /* pill inputs */
+  --r-btn:    25px;
+  --r-btn-sm: 14px;
+  --r-inner:  12px;
+
+  /* Shadows */
+  --shadow-card: 0 8px 32px rgba(20,10,5,0.38);
+  --shadow-sm:   0 1px 3px rgba(20,10,5,0.12);
+
+  /* Bootstrap overrides */
+  --bs-body-font-family: 'Anonymous Pro', monospace;
+  --bs-body-bg: var(--brew-page);
+  --bs-body-color: var(--brew-ink);
+  --bs-border-radius: var(--r-inner);
+  --bs-primary: var(--brew-accent);
+  --bs-primary-rgb: 177,101,20;
+
+  /* Typography scale (Figma px → rem at 16px base) */
+  --fs-brand:  3.75rem; /* 60px */
+  --fs-h1:     3.4375rem; /* 55px */
+  --fs-h2:     3.125rem; /* 50px */
+  --fs-h3:     2.5rem;  /* 40px */
+  --fs-h4:     2.1875rem; /* 35px */
+  --fs-body:   1rem;
+  --fs-sm:     0.875rem;
+  --fs-xs:     0.75rem;
+}
+
+/* ---------- Reset / base ---------- */
+*, *::before, *::after { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html { font-size: 16px; }
+body {
+  margin: 0; padding: 0;
+  font-family: 'Anonymous Pro', monospace;
+  background: var(--brew-page);
+  color: var(--brew-ink);
+  min-height: 100dvh;
+}
+h1,h2,h3,h4,h5,h6 { font-family: 'Anonymous Pro', monospace; font-weight: 700; }
+a { color: var(--brew-accent); }
+
+/* ---------- Buttons ---------- */
+.btn {
+  font-family: 'Anonymous Pro', monospace;
+  font-weight: 700;
+  border-radius: var(--r-btn);
+  transition: transform .08s ease, opacity .15s ease;
+  letter-spacing: 0;
+}
+.btn:active { transform: translateY(1px); }
+.btn-sm { border-radius: var(--r-btn-sm); font-size: .85rem; }
+.btn-lg { border-radius: var(--r-btn); padding: .65rem 1.6rem; font-size: 1.05rem; }
+
+.btn-primary {
+  background: var(--brew-accent); border-color: var(--brew-accent); color: #fff;
+  box-shadow: 0 4px 14px rgba(177,101,20,0.35);
+}
+.btn-primary:hover, .btn-primary:focus {
+  background: var(--brew-accent-d); border-color: var(--brew-accent-d); color: #fff;
+}
+.btn-primary:disabled { background: #c8905a; border-color: #c8905a; opacity: .7; }
+
+.btn-outline-secondary {
+  border-color: #c4b8a8; color: var(--brew-ink);
+}
+.btn-outline-secondary:hover { background: var(--brew-navbar); color: #fff; border-color: var(--brew-navbar); }
+
+.btn-light { background: rgba(255,255,255,0.15); border: 1px solid var(--brew-line); color: #fff; }
+.btn-light:hover { background: rgba(255,255,255,0.25); color: #fff; }
+
+.btn-outline-danger { color: #c0392b; border-color: #e7c3bd; }
+.btn-outline-danger:hover { background: #c0392b; color: #fff; }
+
+.text-coffee { color: var(--brew-accent) !important; }
+
+/* ---------- Brand mark / avatar ---------- */
+.brand-mark {
+  width: 48px; height: 48px; border-radius: 14px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 24px; color: #fff;
+  background: var(--brew-accent);
+}
+.brand-mark.sm { width: 32px; height: 32px; font-size: 16px; border-radius: 9px; }
+.avatar {
+  width: 38px; height: 38px; border-radius: 50%; color: #fff;
+  background: var(--brew-accent);
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 700; flex: 0 0 auto; font-size: .9rem;
+}
+
+/* ============================================================
+   AUTH FLOW — matches Figma exactly
+   Background: blurred warm-grey + brown overlay
+   Card: dark rounded (Figma #2A1B11 glass)
+   ============================================================ */
+.auth-screen {
+  min-height: 100dvh;
+  display: flex; align-items: center; justify-content: center;
+  background:
+    linear-gradient(180deg, rgba(63,43,31,0.30) 0%, rgba(42,27,17,0.45) 100%),
+    url('../img/auth-bg.png') center/cover no-repeat,
+    var(--brew-page);
+  background-attachment: fixed;
+  position: relative;
+}
+
+/* Dark brown top navbar bar (same as Figma) */
+.auth-screen::before {
+  content: '';
+  position: fixed; top: 0; left: 0; right: 0;
+  height: 100px;
+  background: var(--brew-navbar-90);
+  z-index: 10;
+}
+
+.auth-navbar {
+  position: fixed; top: 0; left: 0; right: 0; height: 100px;
+  background: var(--brew-navbar-90);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 20;
+}
+.auth-navbar-brand {
+  font-family: 'Anonymous Pro', monospace;
+  font-weight: 700; font-size: var(--fs-brand);
+  color: #fff; letter-spacing: -.01em;
+}
+
+/* The card that holds all auth forms */
+.auth-root { width: 100%; max-width: 500px; padding: 0 1rem; position: relative; z-index: 5; }
+
+.auth-card {
+  background: var(--brew-card-80);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 30px;
+  box-shadow: var(--shadow-card);
+  padding: 2.25rem 2rem 2rem;
+  color: #fff;
+  backdrop-filter: blur(4px);
+}
+.auth-card .form-control,
+.auth-card .form-select {
+  background: #fff; color: var(--brew-placeholder);
+  border: none; border-radius: var(--r-input);
+  padding: 1rem 1.25rem 1rem 3.2rem;
+  font-family: 'Anonymous Pro', monospace;
+  font-size: 1.15rem; font-weight: 700;
+  height: 62px; line-height: 1;
+  box-shadow: none;
+}
+.auth-card .form-control:focus,
+.auth-card .form-select:focus {
+  box-shadow: 0 0 0 3px rgba(177,101,20,.35);
+  outline: none; color: var(--brew-ink);
+}
+.auth-card .form-select { padding-left: 1.25rem; }
+
+/* Input icon wrapper */
+.auth-input-wrap {
+  position: relative; margin-bottom: .85rem;
+}
+.auth-input-wrap .auth-input-icon {
+  position: absolute; left: 1rem; top: 50%; transform: translateY(-50%);
+  font-size: 1.3rem; color: var(--brew-muted); pointer-events: none; z-index: 2;
+}
+
+.auth-title {
+  font-family: 'Anonymous Pro', monospace;
+  font-size: 2.2rem; font-weight: 700;
+  color: #fff; text-align: center; margin: 0 0 1.5rem;
+}
+.auth-sub { color: var(--brew-white70); text-align: center; font-size: .92rem; margin: -.8rem 0 1rem; }
+.auth-pill {
+  display: block; text-align: center;
+  font-size: .78rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .08em; color: #ffcf94;
+  margin-bottom: .6rem;
+}
+.auth-head { margin-bottom: 1.25rem; }
+.auth-center { text-align: center; }
+
+.auth-form { display: flex; flex-direction: column; gap: 0; }
+.auth-form .btn-primary {
+  margin-top: .75rem; height: 64px;
+  font-size: 1.15rem; border-radius: var(--r-btn);
+}
+
+.auth-error {
+  background: rgba(192,57,43,0.25); border: 1px solid rgba(192,57,43,0.4);
+  color: #ffb3b3; border-radius: var(--r-inner);
+  padding: .55rem .85rem; font-size: .9rem; margin: .35rem 0;
+}
+
+.auth-foot {
+  margin-top: 1rem; text-align: center;
+  color: var(--brew-white70); font-size: .92rem;
+}
+.auth-link { color: #fff; font-weight: 700; text-decoration: underline; }
+.auth-link:hover { color: #ffcf94; }
+
+.auth-back {
+  background: none; border: 0; color: var(--brew-white70);
+  font-weight: 700; font-size: .9rem;
+  display: inline-flex; align-items: center; gap: .35rem;
+  padding: 0; margin-bottom: .9rem; cursor: pointer;
+  font-family: 'Anonymous Pro', monospace;
+}
+.auth-back:hover { color: #fff; }
+
+/* Role selection cards */
+.role-grid { display: grid; grid-template-columns: 1fr 1fr; gap: .85rem; margin-bottom: .5rem; }
+@media (max-width: 480px) { .role-grid { grid-template-columns: 1fr; } }
+
+.role-card {
+  background: rgba(255,255,255,0.07);
+  border: 1.5px solid rgba(255,255,255,0.15);
+  border-radius: 20px; padding: 1.35rem 1rem;
+  cursor: pointer; text-align: left; color: #fff;
+  transition: border-color .15s, background .15s, transform .12s;
+  display: flex; flex-direction: column; gap: .3rem;
+  font-family: 'Anonymous Pro', monospace;
+}
+.role-card:hover {
+  border-color: var(--brew-accent);
+  background: rgba(255,255,255,0.12);
+  transform: translateY(-2px);
+}
+.role-icon {
+  width: 52px; height: 52px; border-radius: 14px;
+  display: grid; place-items: center; font-size: 1.5rem;
+  color: #fff; background: var(--brew-accent); margin-bottom: .4rem;
+}
+.role-name { font-weight: 700; font-size: 1.15rem; }
+.role-blurb { color: var(--brew-white70); font-size: .82rem; line-height: 1.4; flex: 1; }
+.role-go { color: #ffcf94; font-weight: 700; font-size: .85rem; margin-top: .3rem; }
+
+.auth-demo {
+  border-top: 1px solid rgba(255,255,255,.12);
+  margin-top: 1.1rem; padding-top: .85rem;
+  font-size: .82rem; color: var(--brew-white70);
+}
+.auth-demo-title { font-weight: 700; color: rgba(255,255,255,.85); margin-bottom: .25rem; }
+.auth-demo code {
+  color: #ffcf94; background: rgba(177,101,20,0.25);
+  padding: .05rem .35rem; border-radius: 6px;
+}
+
+/* Authenticating + result */
+.auth-spinner .spinner-border { width: 3.2rem; height: 3.2rem; color: var(--brew-accent); border-width: .32rem; }
+.auth-status-text { color: var(--brew-white70); font-size: .9rem; margin-top: .65rem; min-height: 1.2em; }
+.auth-success, .auth-reject {
+  width: 80px; height: 80px; border-radius: 50%;
+  display: grid; place-items: center; font-size: 2.4rem; color: #fff;
+  margin: 0 auto; animation: brewPop .35s ease;
+}
+.auth-success { background: linear-gradient(150deg, #2f9e63, #1d6b42); box-shadow: 0 14px 30px rgba(29,107,66,.4); }
+.auth-reject  { background: linear-gradient(150deg, #d9554a, #a52b1e); box-shadow: 0 14px 30px rgba(165,43,30,.4); }
+@keyframes brewPop {
+  0%   { transform: scale(.6); opacity: 0; }
+  60%  { transform: scale(1.08); }
+  100% { transform: scale(1);   opacity: 1; }
+}
+
+/* ============================================================
+   APP SHELL — dark brown sidebar + warm-grey main
+   ============================================================ */
+.app-shell { display: flex; min-height: 100dvh; }
+
+/* Sidebar */
+.sidebar {
+  width: 250px; flex: 0 0 250px;
+  position: sticky; top: 0; height: 100dvh; z-index: 1045;
+  display: flex; flex-direction: column;
+  background: var(--brew-navbar); color: #e0d4c4;
+  overflow-y: auto;
+}
+.sidebar-brand {
+  display: flex; align-items: center; gap: .7rem;
+  padding: 1.1rem 1.2rem 1rem;
+  font-family: 'Anonymous Pro', monospace;
+  font-weight: 700; font-size: 1.5rem; color: #fff;
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+}
+.sidebar .nav {
+  padding: .6rem .6rem; gap: 2px; flex: 1; display: flex; flex-direction: column;
+}
+.sidebar .nav-link {
+  color: #c8b89e; border-radius: 12px;
+  padding: .68rem .9rem;
+  display: flex; align-items: center; gap: .75rem;
+  font-family: 'Anonymous Pro', monospace;
+  font-weight: 700; font-size: .88rem;
+  transition: background .15s, color .15s;
+  position: relative;
+}
+.sidebar .nav-link i { font-size: 1.05rem; width: 1.25rem; text-align: center; opacity: .85; }
+.sidebar .nav-link:hover { background: rgba(255,255,255,0.08); color: #fff; }
+.sidebar .nav-link.active {
+  background: rgba(177,101,20,0.2); color: #fff;
+}
+.sidebar .nav-link.active::before {
+  content: ''; position: absolute; left: -.6rem; top: 20%; bottom: 20%;
+  width: 4px; border-radius: 0 4px 4px 0; background: var(--brew-accent);
+}
+.sidebar-footer {
+  padding: .85rem 1.2rem; border-top: 1px solid rgba(255,255,255,.09);
+  font-size: .78rem; color: #9e8c78;
+}
+.store-name { font-weight: 700; color: #c8b89e; font-size: .85rem; }
+.sidebar-version { font-size: .7rem; color: #7a6d5e; margin-top: .1rem; }
+
+/* Main area */
+.main { flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--brew-page); }
+
+/* Topbar */
+.topbar {
+  display: flex; align-items: center; gap: .65rem;
+  background: var(--brew-navbar-90);
+  padding: .7rem 1.4rem;
+  position: sticky; top: 0; z-index: 1030;
+  border-bottom: 1px solid rgba(255,255,255,.06);
+}
+.topbar h2, .topbar #view-title {
+  font-family: 'Anonymous Pro', monospace;
+  font-weight: 700; font-size: 1.05rem;
+  color: #fff; margin: 0;
+}
+#user-name { font-family: 'Anonymous Pro', monospace; font-weight: 700; font-size: .88rem; color: #fff; line-height: 1.1; }
+#user-role { font-family: 'Anonymous Pro', monospace; font-size: .7rem; color: #c8b89e; text-transform: uppercase; letter-spacing: .06em; }
+
+.sidebar-scrim { display: none; }
+@media (max-width: 991.98px) {
+  .sidebar { position: fixed; transform: translateX(-100%); transition: transform .22s ease; box-shadow: var(--shadow-card); }
+  .app-shell.nav-open .sidebar { transform: translateX(0); }
+  .app-shell.nav-open .sidebar-scrim {
+    display: block; position: fixed; inset: 0;
+    background: rgba(0,0,0,.5); z-index: 1040;
+  }
+}
+
+.view-container { padding: 1.4rem; flex: 1; }
+
+/* ============================================================
+   SURFACES
+   ============================================================ */
+.card, .section-card {
+  background: var(--brew-surface);
+  border: 1px solid var(--brew-line-dark);
+  border-radius: var(--r-card);
+  box-shadow: var(--shadow-sm);
+}
+.modal-content { border: 0; border-radius: 20px; box-shadow: 0 24px 60px rgba(0,0,0,.3); }
+.modal-header, .modal-footer { border-color: var(--brew-line-dark); }
+.modal-title { font-family: 'Anonymous Pro', monospace; font-weight: 700; }
+
+.form-control, .form-select {
+  border-radius: var(--r-inner); border-color: #d8cdb9;
+  font-family: 'Anonymous Pro', monospace;
+}
+.form-control:focus, .form-select:focus {
+  border-color: var(--brew-accent); box-shadow: 0 0 0 .2rem rgba(177,101,20,.2);
+}
+.form-label { font-family: 'Anonymous Pro', monospace; font-weight: 700; font-size: .85rem; color: #514a3f; }
+
+/* ============================================================
+   POS / ORDER SCREEN
+   ============================================================ */
+.pos-layout { display: grid; grid-template-columns: 1fr 370px; gap: 1.2rem; align-items: start; }
+@media (max-width: 1100px) { .pos-layout { grid-template-columns: 1fr; } }
+
+/* Category tabs — pill style matching Figma */
+.cat-tabs { display: flex; flex-wrap: wrap; gap: .5rem; margin-bottom: 1rem; }
+.cat-tab {
+  border: 1.5px solid #d8cdb9; background: #fff;
+  border-radius: 999px; padding: .42rem 1.1rem;
+  cursor: pointer; font-size: .88rem;
+  font-family: 'Anonymous Pro', monospace; font-weight: 700;
+  color: #6b6356; transition: .15s;
+}
+.cat-tab:hover { border-color: var(--brew-accent); color: var(--brew-accent); }
+.cat-tab.active {
+  background: var(--brew-accent); color: #fff;
+  border-color: var(--brew-accent);
+  box-shadow: 0 4px 12px rgba(177,101,20,.28);
+}
+
+/* Menu tiles — Figma card style (photo on top, name + price below) */
+.menu-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px,1fr)); gap: 1rem; }
+.menu-tile {
+  border: 3px solid #534034; background: #fff;
+  border-radius: 22px; padding: 0; text-align: left;
+  cursor: pointer; overflow: hidden;
+  transition: transform .12s ease, box-shadow .15s ease, border-color .15s;
+  display: flex; flex-direction: column; box-shadow: var(--shadow-sm);
+}
+.menu-tile:hover { transform: translateY(-3px); box-shadow: 0 8px 24px rgba(20,10,5,.18); border-color: var(--brew-accent); }
+.menu-tile:active { transform: translateY(0); }
+.menu-tile-photo {
+  width: 100%; aspect-ratio: 1 / 1; overflow: hidden;
+  background: #efe7d8; border-bottom: 3px solid #534034;
+}
+.menu-tile-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.menu-tile-body { padding: .7rem .9rem .85rem; display: flex; flex-direction: column; gap: .15rem; }
+.menu-tile .name { font-family: 'Anonymous Pro', monospace; font-weight: 700; font-size: 1rem; line-height: 1.15; color: #2e1d0b; }
+.menu-tile .muted { font-size: .7rem; color: var(--brew-muted); text-transform: uppercase; letter-spacing: .05em; font-family: 'Anonymous Pro', monospace; }
+.menu-tile .price { color: var(--brew-accent); font-weight: 700; font-size: 1rem; font-family: 'Anonymous Pro', monospace; }
+
+/* Cart panel — matches Figma right-hand order card */
+.cart-panel {
+  position: sticky; top: 60px;
+  background: var(--brew-card);
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: 18px; display: flex; flex-direction: column;
+  max-height: calc(100dvh - 80px); box-shadow: var(--shadow-card);
+  overflow: hidden; color: #fff;
+}
+.cart-panel .border-bottom { border-bottom: 1px solid rgba(255,255,255,.1) !important; }
+.cart-panel .border-top { border-top: 1px solid rgba(255,255,255,.1) !important; }
+.cart-panel .fw-semibold, .cart-panel .fw-bold { color: #fff; }
+.cart-panel .text-secondary { color: rgba(255,255,255,.55) !important; }
+.cart-panel .text-coffee { color: #ffcf94 !important; }
+
+.cart-items { overflow-y: auto; flex: 1; }
+.cart-line { padding: .75rem 1rem; border-bottom: 1px solid rgba(255,255,255,.07); }
+.cart-line .ttl { display: flex; justify-content: space-between; gap: .5rem; }
+
+/* Quantity stepper */
+.qty-stepper {
+  display: inline-flex; align-items: center;
+  border: 1px solid rgba(255,255,255,.2); border-radius: 10px; overflow: hidden;
+}
+.qty-stepper button {
+  border: 0; background: rgba(255,255,255,.1); width: 32px; height: 32px;
+  font-weight: 700; line-height: 1; cursor: pointer; color: #fff;
+}
+.qty-stepper button:hover { background: rgba(255,255,255,.2); }
+.qty-stepper span { min-width: 34px; text-align: center; font-weight: 700; color: #fff; }
+
+/* Complete / cancel buttons inside cart */
+.cart-panel .btn-primary { background: var(--brew-accent); border-color: var(--brew-accent); color: #fff; border-radius: var(--r-btn); }
+.cart-panel .btn-outline-danger { border-color: rgba(192,57,43,.5); color: #ffaaaa; }
+.cart-panel .btn-outline-danger:hover { background: rgba(192,57,43,.3); color: #ffaaaa; border-color: rgba(192,57,43,.7); }
+
+/* Totals line inside cart */
+.cart-panel .form-control {
+  background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.2);
+  color: #fff; font-family: 'Anonymous Pro', monospace; border-radius: var(--r-inner);
+}
+.cart-panel .form-control:focus { box-shadow: 0 0 0 2px rgba(177,101,20,.5); border-color: var(--brew-accent); }
+
+/* ============================================================
+   STATS / KPI CARDS
+   ============================================================ */
+.stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px,1fr)); gap: 1rem; }
+.stat-card {
+  background: var(--brew-surface); border: 1px solid var(--brew-line-dark);
+  border-radius: var(--r-card); padding: 1.1rem 1.2rem;
+  box-shadow: var(--shadow-sm); position: relative; overflow: hidden;
+}
+.stat-card::after {
+  content: ''; position: absolute; left: 0; top: 0; bottom: 0;
+  width: 4px; background: var(--brew-accent); border-radius: var(--r-card) 0 0 var(--r-card);
+}
+.stat-card .label {
+  font-family: 'Anonymous Pro', monospace;
+  color: var(--brew-muted); font-size: .72rem;
+  text-transform: uppercase; letter-spacing: .06em; font-weight: 700;
+}
+.stat-card .value {
+  font-family: 'Anonymous Pro', monospace;
+  font-size: 1.6rem; font-weight: 700;
+  color: var(--brew-navbar); letter-spacing: -.01em; margin-top: .15rem;
+}
+.stat-card .delta { font-size: .76rem; font-weight: 700; margin-top: .2rem; font-family: 'Anonymous Pro', monospace; }
+.stat-card .delta.up { color: #1d6b42; }
+.stat-card .delta.down { color: #c0392b; }
+
+/* ============================================================
+   TABLES
+   ============================================================ */
+.table { font-family: 'Anonymous Pro', monospace; --bs-table-bg: transparent; margin: 0; }
+.table > thead th {
+  font-size: .72rem; text-transform: uppercase; letter-spacing: .05em;
+  color: var(--brew-muted); border-color: var(--brew-line-dark); font-weight: 700;
+}
+.table > :not(caption) > * > * { padding: .78rem .9rem; border-color: #f0e9dc; }
+.table tbody tr:hover { background: #faf7f0; }
+tr.low-stock { background: #fcefe9 !important; }
+
+/* Badges */
+.badge { font-family: 'Anonymous Pro', monospace; font-weight: 700; padding: .35em .65em; border-radius: 999px; font-size: .72rem; }
+.badge-soft-danger  { background: #f7ddd6; color: #9a2f1e; }
+.badge-soft-success { background: #d7ecdd; color: #1d6b42; }
+.badge-soft-warning { background: #fbf0da; color: #8a6314; }
+.badge-soft-muted   { background: #ece2d2; color: #6a5d49; }
+
+/* ============================================================
+   RECEIPT (print-ready monospace)
+   ============================================================ */
+.receipt {
+  font-family: 'Anonymous Pro', monospace; font-size: 12.5px;
+  color: #000; width: 286px; margin: 0 auto;
+}
+.receipt h4 { text-align: center; margin: 0; font-family: 'Anonymous Pro', monospace; font-weight: 700; }
+.receipt .center { text-align: center; }
+.receipt .row2 { display: flex; justify-content: space-between; gap: 8px; }
+.receipt hr { border: 0; border-top: 1px dashed #000; margin: 6px 0; }
+#print-area { display: none; }
+@media print {
+  body * { visibility: hidden; }
+  #print-area, #print-area * { visibility: visible; }
+  #print-area { display: block; position: absolute; left: 0; top: 0; width: 100%; }
+}
+
+/* ============================================================
+   INVENTORY SPECIFIC
+   ============================================================ */
+/* Status badges already covered; alert row matches Figma warm orange */
+.alert-warning {
+  background: #fbf0da; border-color: #f0dcb0; color: #7a5a1c;
+  border-radius: var(--r-inner); font-family: 'Anonymous Pro', monospace;
+}
+
+/* Add/edit form stock-level bar inside table */
+.stock-bar { height: 8px; border-radius: 999px; background: #e8e0d0; overflow: hidden; }
+.stock-bar-fill { height: 100%; border-radius: 999px; background: var(--brew-accent); transition: width .3s; }
+.stock-bar-fill.low { background: #e67e22; }
+.stock-bar-fill.critical { background: #c0392b; }
+
+/* ============================================================
+   REPORTS / MENU PERFORMANCE
+   ============================================================ */
+/* Segmented period control — pill style from Figma */
+.seg-control {
+  display: inline-flex; background: rgba(63,43,31,0.1);
+  border-radius: 999px; padding: 4px; gap: 2px; flex-wrap: wrap;
+}
+.seg-control button {
+  border: 0; background: transparent; border-radius: 999px;
+  padding: .38rem .95rem; font-weight: 700; font-size: .85rem;
+  color: var(--brew-muted); cursor: pointer; transition: .15s;
+  font-family: 'Anonymous Pro', monospace;
+}
+.seg-control button.active {
+  background: var(--brew-navbar); color: #fff;
+  box-shadow: 0 3px 10px rgba(63,43,31,.28);
+}
+
+/* Rank list (Best/Slow sellers) */
+.rank-list { display: flex; flex-direction: column; }
+.rank-item { display: flex; align-items: center; gap: .85rem; padding: .65rem .25rem; border-top: 1px solid #f0e9dc; }
+.rank-item:first-child { border-top: 0; }
+.rank-badge { width: 32px; height: 32px; border-radius: 10px; display: grid; place-items: center; font-weight: 700; flex: 0 0 auto; background: #ece2d2; color: #6a5d49; font-family: 'Anonymous Pro', monospace; font-size: .85rem; }
+.rank-item.top-1 .rank-badge { background: linear-gradient(150deg, #e8b84b, var(--brew-accent)); color: #fff; }
+.rank-item.top-2 .rank-badge { background: linear-gradient(150deg, #c9cdd6, #9aa1ad); color: #fff; }
+.rank-item.top-3 .rank-badge { background: linear-gradient(150deg, #d8a17a, #b9784e); color: #fff; }
+.rank-name { font-weight: 700; font-family: 'Anonymous Pro', monospace; }
+.rank-meta { color: var(--brew-muted); font-size: .8rem; font-family: 'Anonymous Pro', monospace; }
+.rank-val { margin-left: auto; text-align: right; }
+.rank-val .v { font-weight: 700; color: var(--brew-navbar); font-family: 'Anonymous Pro', monospace; }
+.rank-val .s { font-size: .76rem; color: var(--brew-muted); font-family: 'Anonymous Pro', monospace; }
+
+/* ============================================================
+   USERS — pending approval banner
+   ============================================================ */
+.pending-banner {
+  background: linear-gradient(135deg, #fbf0da, #f6e6c4);
+  border: 1px solid #ecd49a; border-radius: var(--r-card);
+  padding: 1rem 1.15rem; margin-bottom: 1.25rem;
+}
+.pending-row { display: flex; align-items: center; gap: .9rem; padding: .65rem 0; border-top: 1px solid rgba(122,90,28,.18); }
+.pending-row:first-of-type { border-top: 0; }
+.pending-avatar {
+  width: 42px; height: 42px; border-radius: 12px;
+  background: var(--brew-accent); color: #fff;
+  display: grid; place-items: center; font-weight: 700;
+  flex: 0 0 auto; font-family: 'Anonymous Pro', monospace;
+}
+
+/* ============================================================
+   SHIFT
+   ============================================================ */
+/* Re-uses section-card and stat cards above. No extra rules needed. */
+
+/* ============================================================
+   MISC
+   ============================================================ */
+.empty-state {
+  text-align: center; color: var(--brew-muted);
+  padding: 2.5rem 1rem; font-family: 'Anonymous Pro', monospace;
+}
+.empty-state i { font-size: 2.4rem; display: block; margin-bottom: .5rem; opacity: .5; }
+
+.spinner-border.text-coffee { color: var(--brew-accent) !important; }
+
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-thumb { background: #c8b89e; border-radius: 999px; border: 2px solid var(--brew-page); }
+
+/* Bootstrap form-check switch inside card */
+.form-check-input:checked {
+  background-color: var(--brew-accent); border-color: var(--brew-accent);
+}
+.form-check-input:focus { box-shadow: 0 0 0 .2rem rgba(177,101,20,.25); border-color: var(--brew-accent); }
+
+/* Chart.js canvas sits inside section-card */
+.section-card canvas { display: block; }
+
+/* Utility: match Figma "Complete Order" button in cart */
+.btn-complete {
+  background: var(--brew-accent); border: none; color: #fff;
+  border-radius: var(--r-btn); font-weight: 700; width: 100%;
+  padding: .9rem; font-size: 1rem; font-family: 'Anonymous Pro', monospace;
+  cursor: pointer; transition: background .15s;
+}
+.btn-complete:hover { background: var(--brew-accent-d); }

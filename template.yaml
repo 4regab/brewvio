@@ -1,0 +1,123 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  Brewvio - C# ASP.NET Core Web API on Lambda behind an API Gateway HTTP API,
+  a static frontend on S3, and a single CloudFront distribution fronting both.
+  Database is Supabase Postgres (reached over SSL via the DATABASE_URL).
+
+Parameters:
+  DatabaseUrl:
+    Type: String
+    NoEcho: true
+    Description: Supabase Supavisor transaction-pooler URL (postgres://user:pass@host:6543/postgres)
+  JwtKey:
+    Type: String
+    NoEcho: true
+    Description: Secret key (>= 32 bytes) used to sign API JWTs
+
+Globals:
+  Function:
+    Runtime: dotnet8
+    Architectures: [arm64]   # Graviton: cheaper + faster cold start
+    MemorySize: 1024
+    Timeout: 60
+
+Resources:
+  Api:
+    Type: AWS::Serverless::HttpApi
+
+  BrewvioFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/Brewvio/
+      Handler: Brewvio        # assembly name — AddAWSLambdaHosting bootstraps the app
+      Environment:
+        Variables:
+          DATABASE_URL: !Ref DatabaseUrl
+          JWT_KEY: !Ref JwtKey
+      Events:
+        Root:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref Api
+            Path: /
+            Method: ANY
+        Proxy:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref Api
+            Path: "/{proxy+}"
+            Method: ANY
+
+  FrontendBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  FrontendOac:
+    Type: AWS::CloudFront::OriginAccessControl
+    Properties:
+      OriginAccessControlConfig:
+        Name: !Sub '${AWS::StackName}-frontend-oac'
+        OriginAccessControlOriginType: s3
+        SigningBehavior: always
+        SigningProtocol: sigv4
+
+  Distribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        DefaultRootObject: index.html
+        Origins:
+          - Id: s3-frontend
+            DomainName: !GetAtt FrontendBucket.RegionalDomainName
+            OriginAccessControlId: !Ref FrontendOac
+            S3OriginConfig:
+              OriginAccessIdentity: ''
+          - Id: api
+            DomainName: !Sub '${Api}.execute-api.${AWS::Region}.amazonaws.com'
+            CustomOriginConfig:
+              OriginProtocolPolicy: https-only
+        DefaultCacheBehavior:
+          TargetOriginId: s3-frontend
+          ViewerProtocolPolicy: redirect-to-https
+          AllowedMethods: [GET, HEAD, OPTIONS]
+          CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6   # CachingOptimized
+        CacheBehaviors:
+          - PathPattern: /api/*
+            TargetOriginId: api
+            ViewerProtocolPolicy: redirect-to-https
+            AllowedMethods: [GET, HEAD, OPTIONS, PUT, POST, PATCH, DELETE]
+            CachePolicyId: 4135ea2d-6df8-44a3-9df3-4b5a84be39ad   # CachingDisabled
+            OriginRequestPolicyId: b689b0a8-53d0-40ab-baf2-68738e2966ac  # Managed-AllViewerExceptHostHeader
+
+  FrontendBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref FrontendBucket
+      PolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: cloudfront.amazonaws.com
+            Action: s3:GetObject
+            Resource: !Sub '${FrontendBucket.Arn}/*'
+            Condition:
+              StringEquals:
+                AWS:SourceArn: !Sub 'arn:aws:cloudfront::${AWS::AccountId}:distribution/${Distribution}'
+
+Outputs:
+  SiteUrl:
+    Description: Public URL (frontend + /api on one domain)
+    Value: !Sub 'https://${Distribution.DomainName}'
+  FrontendBucketName:
+    Description: Upload wwwroot/ contents here, then invalidate CloudFront
+    Value: !Ref FrontendBucket
+  ApiEndpoint:
+    Description: Direct API Gateway endpoint (bypasses CloudFront)
+    Value: !Sub 'https://${Api}.execute-api.${AWS::Region}.amazonaws.com'
