@@ -2,9 +2,9 @@ name: Test & Deploy
 
 on:
   push:
-    branches: [main]
+    branches: [master]
   pull_request:
-    branches: [main]
+    branches: [master]
 
 env:
   AWS_REGION: ap-southeast-2
@@ -57,7 +57,7 @@ jobs:
     name: Deploy to AWS
     needs: test
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
 
     permissions:
       id-token: write   # required for OIDC token exchange
