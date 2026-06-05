@@ -77,6 +77,16 @@ jobs:
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
 
+      # Apply EF Core migrations to Supabase BEFORE deploying new code, so the
+      # schema is ready when the new Lambda goes live. Uses the session pooler
+      # (port 5432) — migration advisory locks don't work on the transaction
+      # pooler (6543, PgBouncer transaction mode).
+      - name: Apply database migrations
+        run: |
+          dotnet tool install -g dotnet-ef --version 10.0.8
+          dotnet ef database update --project src \
+            --connection "${{ secrets.MIGRATION_CONNECTION_STRING }}"
+
       - name: Install Amazon Lambda Tools
         run: dotnet tool install -g Amazon.Lambda.Tools
 
