@@ -68,7 +68,7 @@ const UI = (() => {
   const closeModal = () => bsModal && bsModal.hide();
 
   // ---- Reason prompt (returns entered text, or null if cancelled) ----
-  function promptReason({ title, label, placeholder, confirmText = 'Confirm', confirmClass = 'btn-primary', required = true }) {
+  function promptReason({ title, label, placeholder, confirmText = 'Confirm', confirmClass = 'btn-primary', required = true, minLength }) {
     return new Promise((resolve) => {
       const input = el('textarea', { class: 'form-control', rows: 3, placeholder: placeholder || '' });
       const err = el('div', { class: 'invalid-feedback d-block text-danger small mt-1', text: '' });
@@ -82,6 +82,7 @@ const UI = (() => {
           button(confirmText, confirmClass, () => {
             const v = input.value.trim();
             if (required && !v) { err.textContent = 'This field is required.'; input.classList.add('is-invalid'); return; }
+            if (minLength && v.length < minLength) { err.textContent = `Must be at least ${minLength} characters.`; input.classList.add('is-invalid'); return; }
             finish(v);
           }),
         ],
@@ -132,11 +133,9 @@ const UI = (() => {
   // viewToolbar('Title', actionEl, actionEl, ...) or viewToolbar({ title, subtitle }, ...actions).
   function viewToolbar(arg, ...actions) {
     const opts = typeof arg === 'string' ? { title: arg } : (arg || {});
-    const left = el('div', { class: 'view-toolbar-left' },
-      el('h3', { class: 'view-toolbar-title', text: opts.title || '' }),
-      opts.subtitle ? el('div', { class: 'view-toolbar-sub', text: opts.subtitle }) : null);
+    // Title is now shown in the topbar — just render action buttons
     const right = el('div', { class: 'view-toolbar-actions' }, ...actions);
-    return el('div', { class: 'view-toolbar' }, left, right);
+    return el('div', { class: 'view-toolbar' }, right);
   }
 
   return { $, $$, el, esc, setCurrency, money, qty, dateTime, dateOnly, button, toast, modal, closeModal, promptReason, spinner, empty, statCard, lineChart, barChart, doughnutChart, viewToolbar };

@@ -19,13 +19,6 @@ public class ReportingService(BrewvioDbContext db)
             .Select(t => new { t.Timestamp, t.DiscountAmount, t.TaxAmount, t.TotalAmount })
             .ToListAsync();
 
-        // Cost per menu item from its current recipe (sum of ingredient qty x unit cost).
-        var recipeLines = await db.RecipeIngredients
-            .Select(r => new { r.MenuItemId, LineCost = r.Quantity * r.Ingredient.CostPerUnit })
-            .ToListAsync();
-        var menuCost = recipeLines.GroupBy(x => x.MenuItemId)
-            .ToDictionary(g => g.Key, g => g.Sum(x => x.LineCost));
-
         var items = await db.TransactionItems
             .Where(ti => ti.Transaction.Status == "Completed"
                 && ti.Transaction.Timestamp >= fromUtc && ti.Transaction.Timestamp < toUtc)
@@ -36,16 +29,10 @@ public class ReportingService(BrewvioDbContext db)
         var totalSales = txns.Sum(t => t.TotalAmount);
         var totalTax = txns.Sum(t => t.TaxAmount);
         var totalDiscounts = txns.Sum(t => t.DiscountAmount);
-        var totalCost = Math.Round(items.Sum(i => i.Quantity * menuCost.GetValueOrDefault(i.MenuItemId)), 2);
         var count = txns.Count;
         var itemsSold = items.Sum(i => i.Quantity);
         var aov = count == 0 ? 0 : Math.Round(totalSales / count, 2);
-        // Gross profit = net sales (excl. tax) minus ingredient cost.
-        var netSales = totalSales - totalTax;
-        var grossProfit = Math.Round(netSales - totalCost, 2);
-        var marginPct = netSales == 0 ? 0 : Math.Round(grossProfit / netSales * 100, 1);
-        var summary = new SalesSummaryDto(totalSales, count, aov, totalDiscounts, totalTax, totalCost,
-            grossProfit, itemsSold, marginPct);
+        var summary = new SalesSummaryDto(totalSales, count, aov, totalDiscounts, totalTax, itemsSold);
 
         // Revenue trend bucketed by the requested period.
         var trend = txns
@@ -59,11 +46,8 @@ public class ReportingService(BrewvioDbContext db)
             {
                 var qty = g.Sum(x => x.Quantity);
                 var revenue = g.Sum(x => x.LineTotal);
-                var cost = Math.Round(qty * menuCost.GetValueOrDefault(g.Key.MenuItemId), 2);
-                var profit = Math.Round(revenue - cost, 2);
-                var margin = revenue == 0 ? 0 : Math.Round(profit / revenue * 100, 1);
                 return new MenuPerformanceDto(g.Key.MenuItemId, g.Key.ItemName,
-                    category.GetValueOrDefault(g.Key.MenuItemId, ""), qty, revenue, cost, profit, margin);
+                    category.GetValueOrDefault(g.Key.MenuItemId, ""), qty, revenue);
             })
             .OrderByDescending(p => p.QuantitySold).ToList();
 

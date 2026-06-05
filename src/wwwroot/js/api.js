@@ -48,6 +48,7 @@ const Api = (() => {
     get: (u) => request('GET', u),
     post: (u, b) => request('POST', u, b ?? {}),
     put: (u, b) => request('PUT', u, b ?? {}),
+    delete: (u) => request('DELETE', u),
     login: (username, password) => request('POST', '/api/auth/login', { username, password }),
     register: (body) => request('POST', '/api/auth/register', body),
     accountStatus: (username) => request('GET', '/api/auth/status?username=' + encodeURIComponent(username)),

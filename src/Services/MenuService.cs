@@ -58,6 +58,27 @@ public class MenuService(BrewvioDbContext db, AuditService audit)
         return true;
     }
 
+    public async Task<bool> DeleteMenuItemAsync(int id)
+    {
+        var item = await db.MenuItems.Include(m => m.Recipe).FirstOrDefaultAsync(m => m.Id == id);
+        if (item is null) return false;
+        db.RecipeIngredients.RemoveRange(item.Recipe);
+        db.MenuItems.Remove(item);
+        audit.Add("MenuItemDeleted", $"{item.Name} permanently deleted");
+        await db.SaveChangesAsync();
+        return true;
+    }
+
+    public async Task<bool> DeleteModifierAsync(int id)
+    {
+        var m = await db.Modifiers.FindAsync(id);
+        if (m is null) return false;
+        db.Modifiers.Remove(m);
+        audit.Add("ModifierDeleted", $"{m.GroupName}/{m.Name} permanently deleted");
+        await db.SaveChangesAsync();
+        return true;
+    }
+
     public async Task<List<ModifierDto>> ListModifiersAsync(bool includeInactive = false)
     {
         var q = db.Modifiers.AsQueryable();

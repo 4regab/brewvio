@@ -44,20 +44,45 @@ public class SettingsService(BrewvioDbContext db, AuditService audit)
         return dto;
     }
 
-    public async Task<decimal> GetTaxRateAsync() =>
-        decimal.TryParse((await db.Settings.FindAsync(TaxRate))?.Value, out var t) ? t : 0m;
+    // In-process cache for tax rate — avoids a DB round-trip on every order.
+    private static decimal? _cachedTaxRate;
+    private static DateTime _taxRateCachedAt = DateTime.MinValue;
+
+    public async Task<decimal> GetTaxRateAsync()
+    {
+        if (_cachedTaxRate.HasValue && (DateTime.UtcNow - _taxRateCachedAt).TotalMinutes < 5)
+            return _cachedTaxRate.Value;
+        var val = (await db.Settings.FindAsync(TaxRate))?.Value;
+        SetTaxRateCache(decimal.TryParse(val, out var t) ? t : 0m);
+        return _cachedTaxRate!.Value;
+    }
+
+    private static void SetTaxRateCache(decimal rate)
+    {
+        _cachedTaxRate = rate;
+        _taxRateCachedAt = DateTime.UtcNow;
+    }
 
     // "USB backup" adapted to the web stack: a downloadable JSON snapshot of core tables.
     // Users are projected explicitly (Id/Username/FullName/Role/IsActive) to avoid leaking PasswordHash.
+    // Transactions are projected to avoid circular reference via Cashier navigation property.
     public async Task<object> ExportBackupAsync() => new
     {
         exportedAt = DateTime.UtcNow,
         users = await db.Users.Select(u => new { u.Id, u.Username, u.FullName, u.Role, u.IsActive }).ToListAsync(),
-        ingredients = await db.Ingredients.ToListAsync(),
-        menuItems = await db.MenuItems.Include(m => m.Recipe).ToListAsync(),
-        modifiers = await db.Modifiers.ToListAsync(),
-        transactions = await db.Transactions.Include(t => t.Items).Include(t => t.Payments).ToListAsync(),
-        auditLogs = await db.AuditLogs.ToListAsync(),
-        settings = await db.Settings.ToListAsync()
+        ingredients = await db.Ingredients.AsNoTracking().ToListAsync(),
+        menuItems = await db.MenuItems.AsNoTracking().Include(m => m.Recipe).ToListAsync(),
+        modifiers = await db.Modifiers.AsNoTracking().ToListAsync(),
+        transactions = await db.Transactions.AsNoTracking()
+            .Include(t => t.Items)
+            .Include(t => t.Payments)
+            .Select(t => new {
+                t.Id, t.Timestamp, t.Subtotal, t.DiscountAmount, t.TaxAmount, t.TotalAmount,
+                t.PaymentMethod, t.CashierId, t.Status, t.Notes,
+                Items = t.Items.Select(i => new { i.Id, i.ItemName, i.Quantity, i.UnitPrice, i.LineTotal, i.Modifiers }),
+                Payments = t.Payments.Select(p => new { p.Id, p.Method, p.Amount })
+            }).ToListAsync(),
+        auditLogs = await db.AuditLogs.AsNoTracking().ToListAsync(),
+        settings = await db.Settings.AsNoTracking().ToListAsync()
     };
 }

@@ -33,6 +33,11 @@ public class InventoryController(InventoryService inv) : ControllerBase
     public async Task<IActionResult> Adjust(int id, StockAdjustRequest req) =>
         await inv.AdjustAsync(id, req) is { } i ? Ok(i) : NotFound();
 
+    [HttpDelete("{id:int}")]
+    [Authorize(Roles = Roles.Manager)]
+    public async Task<IActionResult> Delete(int id) =>
+        await inv.DeleteAsync(id) ? NoContent() : NotFound();
+
     [HttpGet("export")]
     [Authorize(Roles = Roles.Manager)]
     public async Task<IActionResult> Export() =>

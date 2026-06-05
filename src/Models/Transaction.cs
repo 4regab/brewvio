@@ -12,9 +12,7 @@ public class Transaction
     public string PaymentMethod { get; set; } = "";   // Cash | Card | Split
     public int CashierId { get; set; }
     public User Cashier { get; set; } = null!;
-    public int? ShiftId { get; set; }
-    public Shift? Shift { get; set; }
-    public string Status { get; set; } = "Completed"; // Completed | Refunded | Cancelled
+    public string Status { get; set; } = "Pending"; // Pending | Preparing | Completed | Refunded | Cancelled
     public string? Notes { get; set; }                // refund/cancel reason
     public ICollection<TransactionItem> Items { get; set; } = new List<TransactionItem>();
     public ICollection<Payment> Payments { get; set; } = new List<Payment>();

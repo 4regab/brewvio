@@ -36,4 +36,8 @@ public class UsersController(UserService users) : ControllerBase
     [HttpPost("{id:int}/reset-password")]
     public async Task<IActionResult> ResetPassword(int id, ResetPasswordRequest req) =>
         await users.ResetPasswordAsync(id, req.NewPassword) ? NoContent() : NotFound();
+
+    [HttpPost("{id:int}/delete")]
+    public async Task<IActionResult> Delete(int id) =>
+        await users.DeleteAsync(id) ? NoContent() : NotFound();
 }

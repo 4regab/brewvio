@@ -10,7 +10,7 @@ obj/
 .vscode/
 .idea/
 *.user
-
+tmp*
 # Local SQLite/Postgres data & secrets
 *.db
 *.db-shm

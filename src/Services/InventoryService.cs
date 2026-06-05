@@ -39,6 +39,16 @@ public class InventoryService(BrewvioDbContext db, AuditService audit)
         return ToDto(ing);
     }
 
+    public async Task<bool> DeleteAsync(int id)
+    {
+        var ing = await db.Ingredients.FindAsync(id);
+        if (ing is null) return false;
+        db.Ingredients.Remove(ing);
+        audit.Add("IngredientDeleted", $"{ing.Name} ({ing.Unit}) removed from inventory");
+        await db.SaveChangesAsync();
+        return true;
+    }
+
     // Manual stock-take: requires a non-empty reason (Adjust Inventory exception path).
     public async Task<IngredientDto?> AdjustAsync(int id, StockAdjustRequest r)
     {

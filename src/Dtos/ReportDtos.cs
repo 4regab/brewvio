@@ -1,14 +1,13 @@
 namespace Brewvio.Dtos;
 
 public record SalesSummaryDto(decimal TotalSales, int TransactionCount, decimal AverageOrderValue,
-    decimal TotalDiscounts, decimal TotalTax, decimal TotalCost, decimal GrossProfit,
-    int ItemsSold, decimal ProfitMarginPercent);
+    decimal TotalDiscounts, decimal TotalTax, int ItemsSold);
 
 public record SalesTrendPointDto(string Label, decimal Sales, int TransactionCount);
 
-// MarginPercent = Profit / Revenue * 100. Used by the Menu Performance profitability view.
+// Used by the Menu Performance view — sales-only, no cost tracking.
 public record MenuPerformanceDto(int MenuItemId, string Name, string Category, int QuantitySold,
-    decimal Revenue, decimal Cost, decimal Profit, decimal MarginPercent);
+    decimal Revenue);
 
 // Combined dashboard payload for a date range. Trend is grouped by the requested period
 // (daily | weekly | monthly | yearly). BestSellers/SlowSellers are convenience slices of

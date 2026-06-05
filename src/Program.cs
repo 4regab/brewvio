@@ -88,7 +88,6 @@ builder.Services.AddScoped<AuditService>();
 builder.Services.AddScoped<SettingsService>();
 builder.Services.AddScoped<InventoryService>();
 builder.Services.AddScoped<MenuService>();
-builder.Services.AddScoped<ShiftService>();
 builder.Services.AddScoped<OrderService>();
 builder.Services.AddScoped<ReportingService>();
 builder.Services.AddScoped<UserService>();

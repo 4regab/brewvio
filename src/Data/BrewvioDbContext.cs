@@ -10,7 +10,6 @@ public class BrewvioDbContext(DbContextOptions<BrewvioDbContext> options) : DbCo
     public DbSet<MenuItem> MenuItems => Set<MenuItem>();
     public DbSet<RecipeIngredient> RecipeIngredients => Set<RecipeIngredient>();
     public DbSet<Modifier> Modifiers => Set<Modifier>();
-    public DbSet<Shift> Shifts => Set<Shift>();
     public DbSet<Transaction> Transactions => Set<Transaction>();
     public DbSet<TransactionItem> TransactionItems => Set<TransactionItem>();
     public DbSet<Payment> Payments => Set<Payment>();
@@ -44,11 +43,6 @@ public class BrewvioDbContext(DbContextOptions<BrewvioDbContext> options) : DbCo
         modelBuilder.Entity<MenuItem>().Property(x => x.Price).HasPrecision(12, 2);
         modelBuilder.Entity<Modifier>().Property(x => x.PriceDelta).HasPrecision(12, 2);
         modelBuilder.Entity<RecipeIngredient>().Property(x => x.Quantity).HasPrecision(12, 3);
-        modelBuilder.Entity<Shift>(e =>
-        {
-            e.Property(x => x.StartingCash).HasPrecision(12, 2);
-            e.Property(x => x.EndingCash).HasPrecision(12, 2);
-        });
         modelBuilder.Entity<Transaction>(e =>
         {
             e.Property(x => x.Subtotal).HasPrecision(12, 2);
@@ -84,11 +78,5 @@ public class BrewvioDbContext(DbContextOptions<BrewvioDbContext> options) : DbCo
         modelBuilder.Entity<Transaction>()
             .HasOne(t => t.Cashier).WithMany()
             .HasForeignKey(t => t.CashierId).OnDelete(DeleteBehavior.Restrict);
-        modelBuilder.Entity<Transaction>()
-            .HasOne(t => t.Shift).WithMany(s => s.Transactions)
-            .HasForeignKey(t => t.ShiftId).OnDelete(DeleteBehavior.SetNull);
-        modelBuilder.Entity<Shift>()
-            .HasOne(s => s.Cashier).WithMany()
-            .HasForeignKey(s => s.CashierId).OnDelete(DeleteBehavior.Restrict);
     }
 }

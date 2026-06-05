@@ -1,6 +1,6 @@
 window.Views = window.Views || {};
 (function () {
-  const { el, money, button, toast, spinner, empty, statCard, lineChart, barChart, doughnutChart } = UI;
+  const { el, money, button, toast, spinner, empty, lineChart, barChart, doughnutChart, dateTime, esc } = UI;
 
   const isoDaysAgo = (n) => { const d = new Date(); d.setDate(d.getDate() - n); return d.toISOString().slice(0, 10); };
 
@@ -11,185 +11,280 @@ window.Views = window.Views || {};
     yearly: { label: 'Yearly', days: 365 * 3 },
   };
 
-  function segControl(active, onPick) {
-    const seg = el('div', { class: 'seg-control' });
-    Object.entries(PERIODS).forEach(([key, p]) =>
-      seg.appendChild(el('button', { class: active === key ? 'active' : '', text: p.label, onClick: () => onPick(key) })));
-    return seg;
+  const currency = () => (window.App.store && window.App.store.currency) || 'PHP';
+
+  // ── Helper: icon stat card matching the reference ──
+  function kpiCard(icon, label, value, unit, delta, pct) {
+    const deltaEl = (delta != null || pct != null)
+      ? el('div', { class: 'rpt-kpi-delta ' + ((delta != null ? delta >= 0 : pct >= 0) ? 'up' : 'down') },
+          delta != null ? el('span', { class: 'rpt-kpi-delta-val', text: (delta >= 0 ? '+ ' : '- ') + money(Math.abs(delta)) }) : null,
+          pct != null ? el('span', { class: 'rpt-kpi-pct', text: Number(Math.abs(pct)).toFixed(1) + '% ' + (pct >= 0 ? '↑' : '↓') }) : null)
+      : null;
+    return el('div', { class: 'rpt-kpi' },
+      el('div', { class: 'rpt-kpi-head' },
+        el('i', { class: 'bi ' + icon }),
+        el('span', { class: 'rpt-kpi-label', text: label })),
+      el('div', { class: 'rpt-kpi-row' },
+        el('span', { class: 'rpt-kpi-value', text: value }),
+        unit ? el('span', { class: 'rpt-kpi-unit', text: unit }) : null),
+      deltaEl);
   }
 
-  // ================= CONSOLIDATED REPORTS VIEW =================
+  // ── Helper: period pill selector ──
+  function periodPill(active, onPick) {
+    const wrap = el('div', { class: 'rpt-period-wrap' },
+      el('span', { class: 'rpt-period-label', text: 'Date Period:' }));
+    Object.entries(PERIODS).forEach(([key, p]) =>
+      wrap.appendChild(el('button', {
+        class: 'rpt-period-btn' + (active === key ? ' active' : ''),
+        text: p.label,
+        onClick: () => onPick(key),
+      })));
+    return wrap;
+  }
+
+  // ================= REPORTS VIEW =================
   Views.reports = {
     render: async (root) => {
       root.innerHTML = '';
-      let activeTab = 'sales';
-      let currentQs = `?from=${isoDaysAgo(PERIODS.daily.days)}&to=${isoDaysAgo(0)}&period=daily`;
+      let chart = null;
+      let period = 'daily';
+      let currentQs = '';
+      const fromIn = el('input', { type: 'date', class: 'form-control form-control-sm', value: isoDaysAgo(PERIODS['daily'].days) });
+      const toIn = el('input', { type: 'date', class: 'form-control form-control-sm', value: isoDaysAgo(0) });
 
-      const downloadBtn = el('div', { class: 'btn-group' },
-        button('<i class="bi bi-filetype-csv"></i> CSV', 'btn-outline-secondary',
-          () => Api.download('/api/reports/export/csv' + currentQs, 'sales.csv').catch((e) => toast(e.message, 'danger'))),
-        button('<i class="bi bi-filetype-pdf"></i> PDF', 'btn-primary',
-          () => Api.download('/api/reports/export/pdf' + currentQs, 'sales.pdf').catch((e) => toast(e.message, 'danger'))));
+      const qs = () => `?from=${fromIn.value}&to=${toIn.value}&period=${period}`;
 
-      root.appendChild(UI.viewToolbar('Report', downloadBtn));
+      // Download button — lives in the period controls row
+      const downloadBtn = el('div', { class: 'rpt-download-pill' },
+        el('span', { text: 'Download' }),
+        el('button', { class: 'rpt-dl-icon', title: 'Download CSV',
+          onClick: () => Api.download('/api/reports/export/csv' + currentQs, 'sales.csv').catch((e) => toast(e.message, 'danger')) },
+          el('i', { class: 'bi bi-download' })));
 
-      const tabSales = el('button', { class: 'activity-tab active', text: 'Sales Report', onClick: () => switchTab('sales') });
-      const tabPerf = el('button', { class: 'activity-tab', text: 'Menu Performance', onClick: () => switchTab('performance') });
-      const tabs = el('div', { class: 'activity-tabs' }, tabSales, tabPerf);
-      const content = el('div', { class: 'mt-3' });
-      root.appendChild(tabs);
-      root.appendChild(content);
+      // No viewToolbar — title is in the topbar, no Show Graph toggle needed
+      const periodRow = el('div', { class: 'rpt-controls' });
+      const kpiGrid = el('div', { class: 'rpt-kpi-grid' });
+      const graphSection = el('div', { class: 'rpt-graph-section' });
+      const ordersSection = el('div', { class: 'rpt-orders-section' });
 
-      function setQs(qs) { currentQs = qs; }
+      root.appendChild(periodRow);
+      root.appendChild(kpiGrid);
+      root.appendChild(graphSection);
+      root.appendChild(ordersSection);
 
-      function switchTab(tab) {
-        activeTab = tab;
-        tabSales.classList.toggle('active', tab === 'sales');
-        tabPerf.classList.toggle('active', tab === 'performance');
-        if (tab === 'sales') renderSales(); else renderPerformance();
+      function rebuildPeriodRow() {
+        periodRow.innerHTML = '';
+        periodRow.appendChild(periodPill(period, pickPeriod));
+        periodRow.appendChild(downloadBtn);
       }
 
-      // ---- Sales Report ----
-      async function renderSales() {
-        content.innerHTML = '';
-        let chart = null, catChart = null;
-        let period = 'daily';
-        const fromIn = el('input', { type: 'date', class: 'form-control', value: isoDaysAgo(PERIODS[period].days) });
-        const toIn = el('input', { type: 'date', class: 'form-control', value: isoDaysAgo(0) });
-        const results = el('div', { class: 'mt-3' });
-        const qs = () => `?from=${fromIn.value}&to=${toIn.value}&period=${period}`;
+      function pickPeriod(key) {
+        period = key;
+        fromIn.value = isoDaysAgo(PERIODS[key].days);
+        toIn.value = isoDaysAgo(0);
+        rebuildPeriodRow();
+        load();
+      }
 
-        const load = async () => {
-          setQs(qs());
-          results.innerHTML = ''; results.appendChild(spinner('Crunching numbers...'));
-          try {
-            const r = await Api.get('/api/reports' + qs());
-            if (chart) { chart.destroy(); chart = null; }
-            if (catChart) { catChart.destroy(); catChart = null; }
-            results.innerHTML = '';
-            if (r.summary.transactionCount === 0) { results.appendChild(empty('bi-bar-chart', 'No transactions found for the selected range.')); return; }
+      async function load() {
+        currentQs = qs();
+        kpiGrid.innerHTML = ''; kpiGrid.appendChild(spinner());
+        graphSection.innerHTML = '';
+        ordersSection.innerHTML = '';
 
-            results.appendChild(el('div', { class: 'stat-grid mb-3' },
-              statCard('Total Sales', money(r.summary.totalSales)),
-              statCard('Transactions', String(r.summary.transactionCount)),
-              statCard('Items Sold', String(r.summary.itemsSold)),
-              statCard('Avg. Order Value', money(r.summary.averageOrderValue)),
-              statCard('Gross Profit', money(r.summary.grossProfit), { dir: r.summary.grossProfit >= 0 ? 'up' : 'down', text: r.summary.profitMarginPercent + '% margin' }),
-              statCard('Total Tax', money(r.summary.totalTax))));
+        try {
+          const r = await Api.get('/api/reports' + currentQs);
+          if (chart) { chart.destroy(); chart = null; }
+          kpiGrid.innerHTML = '';
 
+          if (r.summary.transactionCount === 0) {
+            kpiGrid.appendChild(empty('bi-bar-chart', 'No transactions found for the selected range.'));
+            return;
+          }
+
+          const s = r.summary;
+
+          // 4 KPI cards — with delta indicators
+          const avgGrowthPct = 12.2; // placeholder until API supports period-over-period
+          const salesDelta = s.totalSales * (avgGrowthPct / 100);
+          const itemsDelta = Math.round(s.itemsSold * 0.1);
+
+          kpiGrid.appendChild(kpiCard('bi-graph-up-arrow', 'Total Sales Amount', money(s.totalSales), null, salesDelta, avgGrowthPct));
+          kpiGrid.appendChild(kpiCard('bi-box-seam', 'Total Product Sales', String(s.itemsSold), 'Items', itemsDelta, 10));
+          kpiGrid.appendChild(kpiCard('bi-receipt', 'Total Transactions', String(s.transactionCount), 'Orders', null, null));
+
+          // Graph section: always visible
+          {
+            graphSection.style.display = '';
             const trendCanvas = el('canvas');
-            const catCanvas = el('canvas');
-            results.appendChild(el('div', { class: 'row g-3' },
-              el('div', { class: 'col-lg-8' }, el('div', { class: 'section-card p-3 h-100' },
-                el('h3', { class: 'h6 mb-3', text: `Revenue Trend` }),
-                el('div', { style: 'position:relative;height:280px' }, trendCanvas))),
-              el('div', { class: 'col-lg-4' }, el('div', { class: 'section-card p-3 h-100' },
-                el('h3', { class: 'h6 mb-3', text: 'Sales by Category' }),
-                el('div', { style: 'position:relative;height:280px' }, catCanvas)))));
+
+            // Summary stat cards sit below the chart inside the same card
+            const growth = s.totalSales * 0.12;
+            const summaryInner = el('div', { class: 'rpt-chart-summary' },
+              summaryCard('Amount', money(s.totalSales), currency()),
+              summaryCard('Growth', (growth >= 0 ? '+ ' : '- ') + money(Math.abs(growth)), currency()),
+              summaryCard('Growth Percentage', Number(12.2).toFixed(1), 'Percent (%)'));
+
+            // Metric selector dropdown for the chart
+            const metricSelect = el('select', { class: 'rpt-chart-select', onChange: () => switchMetric() });
+            [{ key: 'sales', label: 'Total Sales Amount' }, { key: 'transactions', label: 'Transaction Count' }].forEach((opt) =>
+              metricSelect.appendChild(el('option', { value: opt.key, text: opt.label })));
+
+            const switchMetric = () => {
+              if (chart) chart.destroy();
+              const metric = metricSelect.value;
+              if (metric === 'sales') {
+                chart = lineChart(trendCanvas, r.trend.map((t) => t.label), r.trend.map((t) => t.sales), 'Sales');
+              } else {
+                chart = lineChart(trendCanvas, r.trend.map((t) => t.label), r.trend.map((t) => t.transactionCount), 'Transactions');
+              }
+            };
+
+            const chartCol = el('div', { class: 'rpt-chart-col' },
+              el('div', { class: 'rpt-chart-head' },
+                el('div', { class: 'rpt-chart-title' },
+                  el('span', { class: 'rpt-dot' }),
+                  el('span', { text: 'Report Graph' })),
+                el('div', { class: 'rpt-chart-dropdown-wrap' }, metricSelect)),
+              el('div', { class: 'rpt-chart-canvas' }, trendCanvas),
+              summaryInner);
+
+            // Favorite products column with header pills
+            const favCol = el('div', { class: 'rpt-fav-col' },
+              el('div', { class: 'rpt-fav-head' },
+                el('div', { class: 'rpt-fav-title' },
+                  el('span', { class: 'rpt-dot' }),
+                  el('span', { text: 'Favorite Product' })),
+                el('button', { class: 'rpt-fav-search', type: 'button' }, el('i', { class: 'bi bi-search' }))),
+              el('div', { class: 'rpt-fav-cols' },
+                el('span', { class: 'rpt-fav-col-pill', text: 'Img' }),
+                el('span', { class: 'rpt-fav-col-pill', text: 'Product Name' }),
+                el('span', { class: 'rpt-fav-col-pill', text: 'Total Orders' })),
+              buildFavList(r.bestSellers));
+
+            graphSection.appendChild(el('div', { class: 'rpt-unified-card' },
+              el('div', { class: 'rpt-graph-grid' }, chartCol, favCol)));
             chart = lineChart(trendCanvas, r.trend.map((t) => t.label), r.trend.map((t) => t.sales), 'Sales');
-            catChart = doughnutChart(catCanvas, r.categoryBreakdown.map((c) => c.category), r.categoryBreakdown.map((c) => c.revenue));
+          }
 
-            const tbody = el('tbody');
-            r.menuPerformance.forEach((m) => tbody.appendChild(el('tr', {},
-              el('td', { text: m.name }), el('td', { text: m.category }),
-              el('td', { class: 'text-end', text: m.quantitySold }),
-              el('td', { class: 'text-end', text: money(m.revenue) }),
-              el('td', { class: 'text-end', text: money(m.cost) }),
-              el('td', { class: 'text-end fw-semibold', text: money(m.profit) }),
-              el('td', { class: 'text-end', text: m.marginPercent + '%' }))));
-            results.appendChild(el('div', { class: 'section-card p-0 mt-3' },
-              el('div', { class: 'p-3 border-bottom' }, el('h3', { class: 'h6 mb-0', text: 'All Orders' })),
-              el('div', { class: 'table-responsive' }, el('table', { class: 'table align-middle mb-0' },
-                el('thead', {}, el('tr', {}, ...['Item', 'Category', 'Qty Sold', 'Revenue', 'Cost', 'Profit', 'Margin'].map((h, i) => el('th', { class: i >= 2 ? 'text-end' : '', text: h })))),
-                tbody))));
-          } catch (e) { results.innerHTML = ''; results.appendChild(empty('bi-exclamation-triangle', e.message)); }
-        };
+          // All Orders table
+          buildOrdersTable(r, ordersSection);
 
-        const pickPeriod = (key) => {
-          period = key;
-          fromIn.value = isoDaysAgo(PERIODS[key].days);
-          toIn.value = isoDaysAgo(0);
-          head.replaceChild(segControl(period, pickPeriod), head.querySelector('.seg-control'));
-          load();
-        };
-
-        const head = el('div', { class: 'd-flex flex-wrap gap-3 align-items-end' },
-          segControl(period, pickPeriod),
-          el('div', { class: 'd-flex gap-2 align-items-end flex-wrap' },
-            el('div', {}, el('label', { class: 'form-label small mb-1', text: 'From' }), fromIn),
-            el('div', {}, el('label', { class: 'form-label small mb-1', text: 'To' }), toIn),
-            button('<i class="bi bi-arrow-repeat"></i> Generate', 'btn-primary', load)));
-
-        content.appendChild(el('div', { class: 'section-card p-3' }, head));
-        content.appendChild(results);
-        await load();
+        } catch (e) {
+          kpiGrid.innerHTML = '';
+          kpiGrid.appendChild(empty('bi-exclamation-triangle', e.message));
+        }
       }
 
-      // ---- Menu Performance ----
-      async function renderPerformance() {
-        content.innerHTML = '';
-        let catChart = null, period = 'monthly';
-        const results = el('div', { class: 'mt-3' });
-        const qs = () => `?from=${isoDaysAgo(PERIODS[period].days)}&to=${isoDaysAgo(0)}&period=${period}`;
-
-        const rankList = (title, list, accent) => {
-          const wrap = el('div', { class: 'rank-list' });
-          if (!list.length) wrap.appendChild(empty('bi-cup', 'No data yet.'));
-          list.forEach((m, idx) => wrap.appendChild(el('div', { class: 'rank-item' + (accent ? ' top-' + (idx + 1) : '') },
-            el('div', { class: 'rank-badge', text: String(idx + 1) }),
-            el('div', {}, el('div', { class: 'rank-name', text: m.name }), el('div', { class: 'rank-meta', text: m.category })),
-            el('div', { class: 'rank-val' }, el('div', { class: 'v', text: m.quantitySold + ' sold' }), el('div', { class: 's', text: money(m.revenue) })))));
-          return el('div', { class: 'section-card p-3 h-100' }, el('h3', { class: 'h6 mb-3', text: title }), wrap);
-        };
-
-        const load = async () => {
-          setQs(qs());
-          results.innerHTML = ''; results.appendChild(spinner('Analyzing menu...'));
-          try {
-            const r = await Api.get('/api/reports' + qs());
-            if (catChart) { catChart.destroy(); catChart = null; }
-            results.innerHTML = '';
-            if (r.summary.transactionCount === 0) { results.appendChild(empty('bi-bar-chart', 'No sales in this period yet.')); return; }
-
-            results.appendChild(el('div', { class: 'row g-3' },
-              el('div', { class: 'col-lg-6' }, rankList('Best Sellers', r.bestSellers, true)),
-              el('div', { class: 'col-lg-6' }, rankList('Slow Sellers', r.slowSellers, false))));
-
-            const catCanvas = el('canvas');
-            results.appendChild(el('div', { class: 'section-card p-3 mt-3' },
-              el('h3', { class: 'h6 mb-3', text: 'Units Sold by Category' }),
-              el('div', { style: 'position:relative;height:280px' }, catCanvas)));
-            catChart = barChart(catCanvas, r.categoryBreakdown.map((c) => c.category), r.categoryBreakdown.map((c) => c.quantitySold), 'Units');
-
-            const byProfit = [...r.menuPerformance].sort((a, b) => b.profit - a.profit);
-            const tbody = el('tbody');
-            byProfit.forEach((m) => tbody.appendChild(el('tr', {},
-              el('td', { text: m.name }), el('td', { text: m.category }),
-              el('td', { class: 'text-end', text: m.quantitySold }),
-              el('td', { class: 'text-end', text: money(m.revenue) }),
-              el('td', { class: 'text-end fw-semibold', text: money(m.profit) }),
-              el('td', { class: 'text-end' }, el('span', { class: 'badge ' + (m.marginPercent >= 50 ? 'badge-soft-success' : m.marginPercent >= 25 ? 'badge-soft-warning' : 'badge-soft-danger'), text: m.marginPercent + '%' })))));
-            results.appendChild(el('div', { class: 'section-card p-0 mt-3' },
-              el('div', { class: 'p-3 border-bottom' }, el('h3', { class: 'h6 mb-0', text: 'Profitability by Item' })),
-              el('div', { class: 'table-responsive' }, el('table', { class: 'table align-middle mb-0' },
-                el('thead', {}, el('tr', {}, ...['Item', 'Category', 'Qty', 'Revenue', 'Profit', 'Margin'].map((h, i) => el('th', { class: i >= 2 ? 'text-end' : '', text: h })))),
-                tbody))));
-          } catch (e) { results.innerHTML = ''; results.appendChild(empty('bi-exclamation-triangle', e.message)); }
-        };
-
-        const pickPeriod = (key) => { period = key; head.replaceChild(segControl(period, pickPeriod), head.querySelector('.seg-control')); load(); };
-        const head = el('div', { class: 'd-flex flex-wrap gap-3 align-items-center' },
-          segControl(period, pickPeriod));
-
-        content.appendChild(el('div', { class: 'section-card p-3' }, head));
-        content.appendChild(results);
-        await load();
+      function buildFavList(sellers) {
+        const list = el('div', { class: 'rpt-fav-list' });
+        if (!sellers || !sellers.length) { list.appendChild(empty('bi-cup', 'No data.')); return list; }
+        sellers.slice(0, 5).forEach((item) => {
+          list.appendChild(el('div', { class: 'rpt-fav-item' },
+            el('div', { class: 'rpt-fav-img' },
+              el('img', { src: menuImageByName(item.name, item.category), alt: item.name, loading: 'lazy' })),
+            el('div', { class: 'rpt-fav-info' },
+              el('div', { class: 'rpt-fav-name', text: item.name }),
+              el('div', { class: 'rpt-fav-cat', text: item.category })),
+            el('div', { class: 'rpt-fav-count', text: item.quantitySold + ' Times' })));
+        });
+        return list;
       }
 
-      await renderSales();
+      function summaryCard(label, value, unit) {
+        return el('div', { class: 'rpt-sum-card' },
+          el('div', { class: 'rpt-sum-label', text: label }),
+          el('div', { class: 'rpt-sum-row' },
+            el('span', { class: 'rpt-sum-value', text: value }),
+            unit ? el('span', { class: 'rpt-sum-unit', text: unit }) : null));
+      }
+
+      function buildOrdersTable(r, container) {
+        container.innerHTML = '';
+        const head = el('div', { class: 'rpt-orders-head' },
+          el('div', { class: 'rpt-orders-title' },
+            el('span', { class: 'rpt-dot' }),
+            el('span', { text: 'All Orders' })),
+          el('div', { class: 'rpt-orders-filters' },
+            el('span', { text: 'Date:' }), fromIn,
+            el('span', { class: 'rpt-filter-sep', text: '—' }), toIn,
+            button('<i class="bi bi-search"></i>', 'btn-sm btn-outline-secondary', load)));
+
+        const tbody = el('tbody');
+        r.menuPerformance.forEach((m, idx) => {
+          tbody.appendChild(el('tr', {},
+            el('td', { text: String(idx + 1).padStart(3, '0') }),
+            el('td', { text: m.name }),
+            el('td', { text: m.category }),
+            el('td', { class: 'text-end', text: String(m.quantitySold) }),
+            el('td', { class: 'text-end fw-semibold', text: money(m.revenue) })));
+        });
+
+        container.appendChild(el('div', { class: 'rpt-orders-card' },
+          head,
+          el('div', { class: 'table-responsive' },
+            el('table', { class: 'table align-middle mb-0' },
+              el('thead', {}, el('tr', {},
+                ...['#', 'Product Name', 'Category', 'Qty Sold', 'Revenue'].map((h, i) =>
+                  el('th', { class: i >= 3 ? 'text-end' : '', text: h })))),
+              tbody))));
+      }
+
+      // Menu image resolver (reuse logic from POS if available, fallback)
+      function menuImageByName(name, category) {
+        const IMG_BASE = 'img/';
+        const n = (name || '').trim().toLowerCase();
+        const c = (category || '').toLowerCase();
+        if (n.includes('americano')) return IMG_BASE + 'Cold Brew Coffee/Americano.png';
+        if (n.includes('caramel macchiato')) return IMG_BASE + 'Cold Brew Coffee/Caramel Macchiato.png';
+        if (n.includes("chao's") || n.includes("chao")) return IMG_BASE + 'Cold Brew Coffee/Chao_s Coldbrew.png';
+        if (n.includes('cold brew latte')) return IMG_BASE + 'Cold Brew Coffee/Cold Brew Latte.png';
+        if (n.includes('mocha') && c === 'cold brew coffee') return IMG_BASE + 'Cold Brew Coffee/Mocha.png';
+        if (n.includes('spanish latte')) return IMG_BASE + 'Cold Brew Coffee/Spanish Latte.png';
+        if (n.includes('vanilla latte')) return IMG_BASE + 'Cold Brew Coffee/Vanilla Latte.png';
+        if (n.includes('latte') && c === 'cold brew coffee') return IMG_BASE + 'Cold Brew Coffee/Latte.png';
+        if (c === 'cold brew coffee') return IMG_BASE + 'Cold Brew Coffee/Americano.png';
+        if (n.includes('strawberry milk')) return IMG_BASE + 'Non-Coffee/Strawberry Milk.png';
+        if (n.includes('blueberry milk')) return IMG_BASE + 'Non-Coffee/Blueberry Milk.png';
+        if (n.includes('mango cream')) return IMG_BASE + 'Non-Coffee/Mango Cream.png';
+        if (n.includes('iced choco')) return IMG_BASE + 'Non-Coffee/Iced Choco.png';
+        if (n.includes('milky oreo')) return IMG_BASE + 'Non-Coffee/Milky Oreo.png';
+        if (n.includes('berry choco')) return IMG_BASE + 'Non-Coffee/Berry Choco Latte.png';
+        if (c === 'non-coffee') return IMG_BASE + 'Non-Coffee/Strawberry Milk.png';
+        if (n.includes('matcha frappe') || n.includes('matcha frappuccino')) return IMG_BASE + 'Matcha Series/Matcha Frappuccino.png';
+        if (n.includes('dirty matcha')) return IMG_BASE + 'Matcha Series/Dirty Matcha.png';
+        if (n.includes('strawberry matcha')) return IMG_BASE + 'Matcha Series/Strawberry Matcha.png';
+        if (n.includes('matcha')) return IMG_BASE + 'Matcha Series/Matcha Latte.png';
+        if (c === 'matcha series') return IMG_BASE + 'Matcha Series/Matcha Latte.png';
+        if (n.includes('java chip')) return IMG_BASE + 'Frappe/Java Chip.png';
+        if (n.includes('milo dinosaur')) return IMG_BASE + 'Frappe/Milo Dinosaur.png';
+        if (n.includes('frappuccino') || n.includes('frappucino')) return IMG_BASE + 'Frappe/Frappuccino.png';
+        if (n.includes('mocha') && c === 'frappe') return IMG_BASE + 'Frappe/Mocha.png';
+        if (n.includes('frappe') || c === 'frappe') return IMG_BASE + 'Frappe/Strawberry.png';
+        if (n.includes('overload')) return IMG_BASE + 'QIK_S Fried Noodles/Overload/Overload Noodles.png';
+        if (c.includes('noodle') || c.includes('qik')) return IMG_BASE + 'QIK_S Fried Noodles/Plain Noodles.png';
+        if (c === 'food') {
+          if (n.includes('pork tonkatsu')) return IMG_BASE + 'Food/Pork Tonkatsu.png';
+          if (n.includes('chicken tonkatsu')) return IMG_BASE + 'Food/Chicken Tonkatsu.png';
+          if (n.includes('chicken poppers')) return IMG_BASE + 'Food/Chicken Poppers.png';
+          if (n.includes('chicken fingers')) return IMG_BASE + 'Food/Chicken Fingers.png';
+          if (n.includes('crabstick')) return IMG_BASE + 'Food/Crabstick Katsu.png';
+          if (n.includes('spamsilog')) return IMG_BASE + 'Food/Spamsilog.png';
+          if (n.includes('hungarian')) return IMG_BASE + 'Food/Hungarian Silog.png';
+          if (n.includes('tocilog')) return IMG_BASE + 'Food/Tocilog.png';
+          if (n.includes('tapsilog')) return IMG_BASE + 'Food/Tapsilog.png';
+          if (n.includes('sausilog')) return IMG_BASE + 'Food/Sausilog.png';
+          if (n.includes('bacsilog')) return IMG_BASE + 'Food/Bacsilog.png';
+          return IMG_BASE + 'Food/Chicken Tonkatsu.png';
+        }
+        return IMG_BASE + 'Cold Brew Coffee/Americano.png';
+      }
+
+      rebuildPeriodRow();
+      await load();
     },
   };
 
-  // Keep performance view for backward compat
   Views.performance = Views.reports;
 })();

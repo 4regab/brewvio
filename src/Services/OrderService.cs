@@ -16,23 +16,21 @@ public class OrderService(BrewvioDbContext db, CurrentUser current, AuditService
             throw new ArgumentException("The cart is empty.");
 
         var menuIds = req.Items.Select(i => i.MenuItemId).Distinct().ToList();
-        var menuItems = await db.MenuItems.Include(m => m.Recipe)
-            .Where(m => menuIds.Contains(m.Id)).ToDictionaryAsync(m => m.Id);
         var modIds = req.Items.SelectMany(i => i.ModifierIds ?? Array.Empty<int>()).Distinct().ToList();
-        var mods = await db.Modifiers.Where(m => modIds.Contains(m.Id)).ToDictionaryAsync(m => m.Id);
+
+        // Sequential awaits — EF Core DbContext is not thread-safe; Task.WhenAll on the same
+        // context causes "second operation started before previous completed" errors.
+        var menuItems = await db.MenuItems.Include(m => m.Recipe).Where(m => menuIds.Contains(m.Id)).ToDictionaryAsync(m => m.Id);
+        var mods      = modIds.Count > 0 ? await db.Modifiers.Where(m => modIds.Contains(m.Id)).ToDictionaryAsync(m => m.Id) : new Dictionary<int, Modifier>();
+        var taxRate   = await settings.GetTaxRateAsync();
 
         var lineItems = new List<TransactionItem>();
         var usage = new Dictionary<int, decimal>();      // ingredientId -> quantity to deduct
         var subtotal = BuildLineItems(req.Items, menuItems, mods, lineItems, usage);
 
         subtotal = Math.Round(subtotal, 2);
-        // Polymorphic discount: today the wire contract carries a peso amount, so we resolve a
-        // FixedAmountDiscount. The subclass's Apply() does the same clamp+round we used to do
-        // inline, so totals are byte-identical with the previous implementation. Swapping in
-        // a PercentDiscount (or a future BOGO/StackedDiscount) requires no change here.
         Discount discount = new FixedAmountDiscount(req.DiscountAmount);
         var discountAmount = discount.Apply(subtotal);
-        var taxRate = await settings.GetTaxRateAsync();
         var tax = Math.Round((subtotal - discountAmount) * taxRate / 100m, 2);
         var total = subtotal - discountAmount + tax;
 
@@ -52,19 +50,15 @@ public class OrderService(BrewvioDbContext db, CurrentUser current, AuditService
         var method = gcashTendered > 0 ? "GCash" : "Cash";
 
         // Deduct recipe ingredients and collect low/negative-stock warnings.
-        // The actual deduction + persistence happens in PersistWithStockAsync, which re-applies the
-        // deductions against fresh values and retries if a concurrent order changed stock first
-        // (optimistic concurrency via the Ingredient xmin token) — preventing oversell.
-        var shiftId = (await db.Shifts.FirstOrDefaultAsync(s => s.CashierId == current.Id && s.Status == "Open"))?.Id;
         var tx = new Transaction
         {
             Timestamp = DateTime.UtcNow, Subtotal = subtotal, DiscountAmount = discountAmount,
             TaxAmount = tax, TotalAmount = total, PaymentMethod = method,
-            CashierId = current.Id, ShiftId = shiftId, Status = "Completed",
+            CashierId = current.Id, Status = "Preparing",
             Items = lineItems, Payments = payRows
         };
         db.Transactions.Add(tx);
-        audit.Add("OrderCompleted", $"Txn total {total:0.00} via {method}; {lineItems.Count} line(s).");
+        audit.Add("OrderPlaced", $"Txn total {total:0.00} via {method}; {lineItems.Count} line(s).");
 
         var warnings = await PersistWithStockAsync(usage);
 
@@ -144,10 +138,45 @@ public class OrderService(BrewvioDbContext db, CurrentUser current, AuditService
     public Task CancelAsync(string reason) =>
         audit.LogAsync("OrderCancelled", string.IsNullOrWhiteSpace(reason) ? "(no reason given)" : reason);
 
+    // Advances order through the queue: Preparing → Completed.
+    private static readonly Dictionary<string, string> NextStatus = new()
+    {
+        ["Pending"] = "Preparing",    // legacy: kept for old orders
+        ["Preparing"] = "Completed"
+    };
+
+    public async Task<TransactionSummaryDto?> AdvanceStatusAsync(int id)
+    {
+        var tx = await db.Transactions.Include(t => t.Cashier)
+            .FirstOrDefaultAsync(t => t.Id == id);
+        if (tx is null) return null;
+        if (!NextStatus.TryGetValue(tx.Status, out var next))
+            throw new InvalidOperationException($"Order #{id} cannot be advanced from status '{tx.Status}'.");
+
+        tx.Status = next;
+        audit.Add("OrderStatusAdvanced", $"Txn #{tx.Id} moved to {next}.");
+        await db.SaveChangesAsync();
+
+        var items = await db.TransactionItems.Where(ti => ti.TransactionId == id).ToListAsync();
+        var itemSummary = string.Join(", ", items.Select(i => i.Quantity > 1 ? $"{i.Quantity}x {i.ItemName}" : i.ItemName));
+        var name = tx.Cashier.FullName != "" ? tx.Cashier.FullName : tx.Cashier.Username;
+        return new TransactionSummaryDto(tx.Id, tx.Timestamp, tx.TotalAmount, tx.PaymentMethod, tx.Status, name, items.Count, itemSummary);
+    }
+
+    public async Task<int> ActiveQueueCountAsync() =>
+        await db.Transactions.CountAsync(t => t.Status == "Pending" || t.Status == "Preparing");
+
+    public async Task<int> NextOrderNumberAsync() =>
+        (await db.Transactions.MaxAsync(t => (int?)t.Id) ?? 0) + 1;
+
     public async Task<List<TransactionSummaryDto>> RecentAsync(int take = 50) =>
-        await db.Transactions.AsNoTracking().OrderByDescending(t => t.Timestamp).Take(take)
+        await db.Transactions.AsNoTracking()
+            .OrderByDescending(t => t.Timestamp)
+            .Take(take)
             .Select(t => new TransactionSummaryDto(t.Id, t.Timestamp, t.TotalAmount, t.PaymentMethod, t.Status,
-                t.Cashier.FullName != "" ? t.Cashier.FullName : t.Cashier.Username, t.Items.Count))
+                t.Cashier.FullName != "" ? t.Cashier.FullName : t.Cashier.Username,
+                t.Items.Count,
+                string.Join(", ", t.Items.Select(i => i.Quantity > 1 ? i.Quantity + "x " + i.ItemName : i.ItemName))))
             .ToListAsync();
 
     public async Task<ReceiptDto?> GetReceiptAsync(int id)

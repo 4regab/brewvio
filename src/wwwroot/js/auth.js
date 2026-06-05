@@ -47,7 +47,7 @@ const Auth = (() => {
         el('p', { class: 'auth-sub', text: 'Who is logging in?' })),
       el('div', { class: 'role-grid' },
         roleCard('Manager', 'bi-person-badge', 'Full access: POS, inventory, reports & staff.'),
-        roleCard('Cashier', 'bi-cup-hot', 'Take orders, run shifts & print receipts.')),
+        roleCard('Cashier', 'bi-cup-hot', 'Take orders & print receipts.')),
       el('div', { class: 'auth-foot mt-3' },
         el('span', { text: "Don't have an account? " }),
         el('a', { href: '#', class: 'auth-link', onClick: (e) => { e.preventDefault(); signupScreen('Cashier'); } }, 'Sign Up'))));
@@ -55,8 +55,8 @@ const Auth = (() => {
 
   // ---------- Screen 2a: Log in ----------
   function loginScreen(role) {
-    const user = el('input', { class: 'form-control', autocomplete: 'username', placeholder: 'Name' });
-    const pass = el('input', { type: 'password', class: 'form-control', autocomplete: 'current-password', placeholder: 'Password' });
+    const user = el('input', { class: 'form-control', autocomplete: 'off', placeholder: 'Name' });
+    const pass = el('input', { type: 'password', class: 'form-control', autocomplete: 'new-password', placeholder: 'Password' });
     const err  = el('div', { class: 'auth-error d-none' });
     const submit = button('Log In', 'btn-primary w-100');
     submit.type = 'submit';
@@ -108,7 +108,8 @@ const Auth = (() => {
     const form = el('form', { class: 'auth-form', onSubmit: async (e) => {
       e.preventDefault();
       err.classList.add('d-none');
-      if (!user.value.trim() || pass.value.length < 6) { err.textContent = 'Username is required and password must be at least 6 characters.'; err.classList.remove('d-none'); return; }
+      if (!user.value.trim()) { err.textContent = 'Username is required.'; err.classList.remove('d-none'); return; }
+      if (pass.value.length < 6) { err.textContent = 'Password must be at least 6 characters.'; err.classList.remove('d-none'); return; }
       setBusy(submit, true, 'Submitting…');
       try {
         await Api.register({ username: user.value.trim(), fullName: full.value.trim(), password: pass.value, role: roleSel.value });

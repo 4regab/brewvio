@@ -92,4 +92,17 @@ public class UserService(BrewvioDbContext db, AuditService audit)
         await db.SaveChangesAsync();
         return true;
     }
+
+    public async Task<bool> DeleteAsync(int id)
+    {
+        var user = await db.Users.FindAsync(id);
+        if (user is null) return false;
+        // Prevent deleting if user has transactions (integrity)
+        if (await db.Transactions.AnyAsync(t => t.CashierId == id))
+            throw new InvalidOperationException("Cannot delete a user with existing transactions. Deactivate instead.");
+        audit.Add("UserDeleted", $"{user.Username} ({user.Role}) deleted.");
+        db.Users.Remove(user);
+        await db.SaveChangesAsync();
+        return true;
+    }
 }

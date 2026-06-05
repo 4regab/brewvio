@@ -19,10 +19,11 @@ const App = (() => {
 
   function updateTopbarDate() {
     const el = document.getElementById('topbar-date-text');
+    const cl = document.getElementById('topbar-time-text');
     if (!el) return;
     const now = new Date();
-    const opts = { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' };
-    el.textContent = now.toLocaleDateString('en-US', opts);
+    el.textContent = now.toLocaleDateString('en-US', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' });
+    if (cl) cl.textContent = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
   }
 
   async function init() {
@@ -33,7 +34,7 @@ const App = (() => {
     window.addEventListener('brewvio:unauthorized', () => { if (state.user) { state.user = null; Auth.start(); UI.toast('Your session expired. Please sign in.', 'warning'); } });
 
     updateTopbarDate();
-    setInterval(updateTopbarDate, 60000);
+    setInterval(updateTopbarDate, 30000);
 
     if (Api.getToken()) {
       try { await onAuthenticated(await Api.me()); return; } catch { Api.setToken(null); }
@@ -65,7 +66,7 @@ const App = (() => {
 
   function buildNav() {
     const nav = $('#nav-menu'); nav.innerHTML = '';
-    NAV.filter((n) => n.roles.includes(state.user.role)).forEach((n) =>
+    NAV.filter((n) => !n.hidden && n.roles.includes(state.user.role)).forEach((n) =>
       nav.appendChild(UI.el('a', { class: 'nav-link', href: '#' + n.id }, UI.el('i', { class: 'bi ' + n.icon }), UI.el('span', { text: n.label }))));
   }
 
@@ -75,7 +76,19 @@ const App = (() => {
     if (!allowed(id)) { location.hash = '#pos'; return; }
     $$('#nav-menu .nav-link').forEach((a) => a.classList.toggle('active', a.getAttribute('href') === '#' + id));
     closeSidebar();
-    const root = $('#app'); root.innerHTML = '';
+    // Mark topbar with current view so POS can style it
+    document.querySelector('.topbar').dataset.view = id;
+    // Set page title in topbar (hidden on POS — POS manages its own topbar)
+    const titleEl = document.getElementById('topbar-view-title');
+    if (titleEl) {
+      const nav = NAV.find((n) => n.id === id);
+      titleEl.textContent = id === 'pos' ? '' : (nav ? nav.label : '');
+      titleEl.style.display = id === 'pos' ? 'none' : '';
+    }
+    const root = $('#app');
+    root.innerHTML = '';
+    root.removeAttribute('style'); // clear any inline styles set by previous views (e.g. POS sets padding:0)
+    root.classList.remove('is-pos'); // clear POS full-height mode
     const view = window.Views[id];
     if (!view) { root.appendChild(UI.empty('bi-question-circle', 'View not found.')); return; }
     try { await view.render(root); } catch (e) { root.innerHTML = ''; root.appendChild(UI.empty('bi-exclamation-triangle', e.message || 'Failed to load view.')); }

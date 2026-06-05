@@ -23,4 +23,4 @@ public record RefundRequest(string Reason);
 
 // ----- Transaction history -----
 public record TransactionSummaryDto(int Id, DateTime Timestamp, decimal TotalAmount, string PaymentMethod,
-    string Status, string Cashier, int ItemCount);
+    string Status, string Cashier, int ItemCount, string ItemSummary);

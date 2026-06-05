@@ -41,8 +41,8 @@ window.Views = window.Views || {};
   const card = (...kids) => el('div', { class: 'section-card p-0' }, ...kids);
   const tableWrap = (head, tbody) => el('div', { class: 'table-responsive' }, el('table', { class: 'table align-middle mb-0' },
     el('thead', {}, el('tr', {}, ...head.map((h) => el('th', { class: h.end ? 'text-end' : '', text: h.t })))), tbody));
-  const toolbar = (title, ...actions) => el('div', { class: 'd-flex align-items-center flex-wrap gap-2 mb-3' },
-    el('h3', { class: 'h5 mb-0 me-auto', text: title }), ...actions);
+  const toolbar = (...actions) => el('div', { class: 'd-flex align-items-center flex-wrap gap-2 mb-3' },
+    ...actions);
 
   // ================= INVENTORY =================
   Views.inventory = {
@@ -89,7 +89,6 @@ window.Views = window.Views || {};
           el('td', { text: i.category || '—' }),
           el('td', { class: 'text-end', text: qty(i.stockLevel) + ' ' + i.unit }),
           el('td', { class: 'text-end', text: qty(i.threshold) }),
-          el('td', { class: 'text-end', text: money(i.costPerUnit) }),
           el('td', { html: statusBadge(i.status) }),
           el('td', { class: 'text-end' }, isManager
             ? el('div', { class: 'd-flex gap-2 justify-content-end' },
@@ -102,7 +101,7 @@ window.Views = window.Views || {};
         const q = search.value.trim().toLowerCase();
         renderRows(items.filter((i) => !q || (i.code + ' ' + i.name + ' ' + i.category).toLowerCase().includes(q)));
       });
-      root.appendChild(card(tableWrap([{ t: 'Code' }, { t: 'Name' }, { t: 'Category' }, { t: 'Stock', end: 1 }, { t: 'Threshold', end: 1 }, { t: 'Cost/unit', end: 1 }, { t: 'Status' }, { t: '', end: 1 }], tbody)));
+      root.appendChild(card(tableWrap([{ t: 'Code' }, { t: 'Name' }, { t: 'Category' }, { t: 'Stock', end: 1 }, { t: 'Threshold', end: 1 }, { t: 'Status' }, { t: '', end: 1 }], tbody)));
 
       function reload() { Views.inventory.render(root); }
       function ingredientForm(i) {
@@ -115,11 +114,10 @@ window.Views = window.Views || {};
             { name: 'unit', label: 'Unit (ml, g, pc…)', required: true },
             ...(i ? [] : [{ name: 'stockLevel', label: 'Initial stock', type: 'number', step: '0.001' }]),
             { name: 'threshold', label: 'Low-stock threshold', type: 'number', step: '0.001' },
-            { name: 'costPerUnit', label: 'Cost per unit', type: 'number', step: '0.0001' },
           ],
           values: i || {},
           onSubmit: async (v) => {
-            const payload = { code: v.code, name: v.name, category: v.category, unit: v.unit, stockLevel: i ? i.stockLevel : v.stockLevel, threshold: v.threshold, costPerUnit: v.costPerUnit };
+            const payload = { code: v.code, name: v.name, category: v.category, unit: v.unit, stockLevel: i ? i.stockLevel : v.stockLevel, threshold: v.threshold, costPerUnit: i ? i.costPerUnit : 0 };
             if (i) await Api.put('/api/inventory/' + i.id, payload); else await Api.post('/api/inventory', payload);
             toast('Item saved.'); reload();
           },
@@ -130,7 +128,7 @@ window.Views = window.Views || {};
           title: 'Adjust stock — ' + i.name,
           fields: [
             { name: 'newQuantity', label: `New counted quantity (${i.unit})`, type: 'number', step: '0.001', default: i.stockLevel, required: true },
-            { name: 'reason', label: 'Reason (required)', type: 'textarea', required: true },
+            { name: 'reason', label: 'Reason', type: 'textarea', required: true },
           ],
           submitText: 'Apply adjustment',
           onSubmit: async (v) => { await Api.post(`/api/inventory/${i.id}/adjust`, { newQuantity: v.newQuantity, reason: v.reason }); toast('Stock adjusted.'); reload(); },
@@ -150,17 +148,16 @@ window.Views = window.Views || {};
       const reload = () => Views.menu.render(root);
 
       // --- Menu items ---
-      root.appendChild(toolbar('Menu items', button('<i class="bi bi-plus-lg"></i> Add item', 'btn-primary', () => itemForm())));
+      root.appendChild(toolbar(button('<i class="bi bi-plus-lg"></i> Add item', 'btn-primary', () => itemForm())));
       const tb = el('tbody');
       items.forEach((m) => tb.appendChild(el('tr', {},
         el('td', { class: 'fw-semibold', text: m.name }), el('td', { text: m.category }),
-        el('td', { class: 'text-end', text: money(m.price) }), el('td', { class: 'text-end', text: money(m.cost) }),
-        el('td', { class: 'text-end', text: money(m.price - m.cost) }),
+        el('td', { class: 'text-end', text: money(m.price) }),
         el('td', { html: m.isActive ? '<span class="badge badge-soft-success">Active</span>' : '<span class="badge badge-soft-muted">Hidden</span>' }),
         el('td', { class: 'text-end' }, el('div', { class: 'd-flex gap-2 justify-content-end' },
           button('Edit', 'btn-sm btn-outline-secondary', () => itemForm(m)),
           button(m.isActive ? 'Hide' : 'Show', 'btn-sm btn-light', async () => { await Api.post(`/api/menu/${m.id}/active?active=${!m.isActive}`); reload(); }))))));
-      root.appendChild(card(tableWrap([{ t: 'Name' }, { t: 'Category' }, { t: 'Price', end: 1 }, { t: 'Cost', end: 1 }, { t: 'Margin', end: 1 }, { t: 'Status' }, { t: '', end: 1 }], tb)));
+      root.appendChild(card(tableWrap([{ t: 'Name' }, { t: 'Category' }, { t: 'Price', end: 1 }, { t: 'Status' }, { t: '', end: 1 }], tb)));
 
       // --- Modifiers ---
       root.appendChild(el('div', { class: 'mt-4' }, toolbar('Modifiers', button('<i class="bi bi-plus-lg"></i> Add modifier', 'btn-primary', () => modifierForm()))));
@@ -232,7 +229,7 @@ window.Views = window.Views || {};
       const reload = () => Views.users.render(root);
       const roleOpts = [{ value: 'Cashier', label: 'Cashier' }, { value: 'Manager', label: 'Manager' }];
 
-      root.appendChild(toolbar('Users', button('<i class="bi bi-person-plus"></i> Add user', 'btn-primary', () => formModal({
+      root.appendChild(toolbar(button('<i class="bi bi-person-plus"></i> Add user', 'btn-primary', () => formModal({
         title: 'Add user',
         fields: [{ name: 'username', label: 'Username', required: true }, { name: 'fullName', label: 'Full name' },
           { name: 'password', label: 'Password', type: 'password', required: true }, { name: 'role', label: 'Role', type: 'select', options: roleOpts }],
@@ -244,7 +241,7 @@ window.Views = window.Views || {};
         const banner = el('div', { class: 'pending-banner' },
           el('div', { class: 'd-flex align-items-center gap-2 mb-1' },
             el('i', { class: 'bi bi-person-fill-exclamation', style: 'font-size:1.2rem;color:#8a6314' }),
-            el('h3', { class: 'h6 mb-0', text: `${pending.length} account${pending.length > 1 ? 's' : ''} awaiting approval` })));
+            el('h2', { class: 'h6 mb-0', text: `${pending.length} account${pending.length > 1 ? 's' : ''} awaiting approval` })));
         pending.forEach((p) => banner.appendChild(el('div', { class: 'pending-row' },
           el('div', { class: 'pending-avatar', text: (p.fullName || p.username).slice(0, 1).toUpperCase() }),
           el('div', {}, el('div', { class: 'fw-semibold', text: p.fullName || p.username }),
@@ -254,6 +251,7 @@ window.Views = window.Views || {};
               try { await Api.post(`/api/users/${p.id}/approve`); toast(`${p.username} approved.`); reload(); } catch (e) { toast(e.message, 'danger'); }
             }),
             button('<i class="bi bi-x-lg"></i> Reject', 'btn-sm btn-outline-danger', async () => {
+              if (!confirm(`Reject ${p.username}? This will permanently deny their account.`)) return;
               try { await Api.post(`/api/users/${p.id}/reject`); toast(`${p.username} rejected.`, 'warning'); reload(); } catch (e) { toast(e.message, 'danger'); }
             })))));
         root.appendChild(banner);
@@ -277,9 +275,14 @@ window.Views = window.Views || {};
             values: u, onSubmit: async (v) => { await Api.put('/api/users/' + u.id, v); toast('User updated.'); reload(); },
           })),
           button('Reset password', 'btn-sm btn-light', async () => {
-            const pwd = await promptReason({ title: 'Reset password — ' + u.username, label: 'New password (min 6 chars)', placeholder: 'New password', confirmText: 'Reset' });
+            const pwd = await promptReason({ title: 'Reset password — ' + u.username, label: 'New password (min 6 chars)', placeholder: 'New password', confirmText: 'Reset', minLength: 6 });
             if (pwd == null) return;
             try { await Api.post(`/api/users/${u.id}/reset-password`, { newPassword: pwd }); toast('Password reset.'); } catch (e) { toast(e.message, 'danger'); }
+          }),
+          button('Delete', 'btn-sm btn-outline-danger', async () => {
+            const reason = await promptReason({ title: 'Delete ' + u.username, label: 'Are you sure? This cannot be undone. Type "delete" to confirm.', placeholder: 'delete', confirmText: 'Delete user', confirmClass: 'btn-danger', minLength: 6 });
+            if (reason == null || reason.toLowerCase() !== 'delete') { if (reason != null) toast('Type "delete" to confirm.', 'warning'); return; }
+            try { await Api.post(`/api/users/${u.id}/delete`, {}); toast('User deleted.'); reload(); } catch (e) { toast(e.message, 'danger'); }
           }))))));
       root.appendChild(card(tableWrap([{ t: 'Username' }, { t: 'Full name' }, { t: 'Role' }, { t: 'Status' }, { t: 'Created' }, { t: '', end: 1 }], tbody)));
     },
@@ -318,13 +321,15 @@ window.Views = window.Views || {};
           const dto = { storeName: f.storeName.value.trim(), address: f.address.value.trim(), currency: f.currency.value.trim() || 'PHP', taxRatePercent: Number(f.taxRatePercent.value) || 0 };
           await Api.put('/api/settings', dto);
           window.App.store = { storeName: dto.storeName, address: dto.address, currency: dto.currency, taxRatePercent: dto.taxRatePercent };
-          UI.setCurrency(dto.currency); document.getElementById('sidebar-store').textContent = dto.storeName;
+          UI.setCurrency(dto.currency);
+          const storeEl = document.getElementById('sidebar-store');
+          if (storeEl) storeEl.textContent = dto.storeName;
           toast('Settings saved.');
         } catch (e) { toast(e.message, 'danger'); }
       });
       root.appendChild(el('div', { class: 'row g-3' },
         el('div', { class: 'col-lg-7' }, el('div', { class: 'section-card p-4' },
-          el('h3', { class: 'h5 mb-3', text: 'Store settings' }),
+          el('h2', { class: 'h5 mb-3', text: 'Store settings' }),
           el('div', { class: 'mb-3' }, el('label', { class: 'form-label', text: 'Store name' }), f.storeName),
           el('div', { class: 'mb-3' }, el('label', { class: 'form-label', text: 'Address' }), f.address),
           el('div', { class: 'row g-2 mb-3' },
@@ -332,7 +337,7 @@ window.Views = window.Views || {};
             el('div', { class: 'col-6' }, el('label', { class: 'form-label', text: 'Tax rate (%)' }), f.taxRatePercent)),
           save)),
         el('div', { class: 'col-lg-5' }, el('div', { class: 'section-card p-4' },
-          el('h3', { class: 'h5 mb-3', text: 'Data backup' }),
+          el('h2', { class: 'h5 mb-3', text: 'Data backup' }),
           el('p', { class: 'text-secondary small', text: 'Download a full JSON snapshot of the database (users, menu, inventory, transactions, audit log) for safekeeping.' }),
           button('<i class="bi bi-cloud-download"></i> Download backup', 'btn-outline-secondary', () => Api.download('/api/settings/backup', 'chaobrew-backup.json').catch((e) => toast(e.message, 'danger')))))));
     },

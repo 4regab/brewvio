@@ -40,12 +40,10 @@ These are created once, out-of-band — CloudFormation cannot manage `SecureStri
 
 To create or update them:
 
-```bash
-aws ssm put-parameter --name /brewvio/DATABASE_URL --type SecureString \
-  --value 'postgres://postgres:<pass>@db.<ref>.supabase.co:6543/postgres'
+```powershell
+aws ssm put-parameter --name /brewvio/DATABASE_URL --type SecureString --value 'postgres://postgres:<pass>@db.<ref>.supabase.co:6543/postgres'
 
-aws ssm put-parameter --name /brewvio/JWT_KEY --type SecureString \
-  --value '<production-signing-key-min-32-bytes>'
+aws ssm put-parameter --name /brewvio/JWT_KEY --type SecureString --value '<production-signing-key-min-32-bytes>'
 ```
 
 Use `--overwrite` to update an existing parameter. Once set, you never touch them again for
@@ -63,9 +61,8 @@ normal redeployments — the Lambda picks them up automatically on each cold sta
 The app and tests expect PostgreSQL on port `5433` with a `postgres`/`postgres` superuser.
 The quickest way is Docker:
 
-```bash
-docker run -d --name brewvio-pg -p 5433:5432 \
-  -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=brewvio postgres:16
+```powershell
+docker run -d --name brewvio-pg -p 5433:5432 -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=brewvio postgres:16
 ```
 
 Any existing local Postgres works too — just point `ConnectionStrings__Default` /
@@ -73,7 +70,7 @@ Any existing local Postgres works too — just point `ConnectionStrings__Default
 
 ### 2b. Apply EF Core migrations
 
-```bash
+```powershell
 dotnet ef database update --project src
 ```
 
@@ -82,7 +79,7 @@ Supabase-only role statements are skipped — safe no-op.
 
 ### 2c. Run the API + SPA
 
-```bash
+```powershell
 dotnet run --project src
 ```
 
@@ -104,12 +101,12 @@ On first run it seeds demo data. The JWT signing key comes from `appsettings.Dev
 
 ### Backend (xUnit, real Postgres)
 
-```bash
+```powershell
 # from repo root — needs Postgres on :5433 (see §2a)
 dotnet test tests/
 
 # or from the tests folder
-cd tests && dotnet test
+cd tests; dotnet test
 ```
 
 Tests use a shared database per test class with per-test transaction rollbacks — fast (~24s for
@@ -148,11 +145,17 @@ Before the first deploy, create the two SSM parameters (see §1). After that, re
 
 Run from the **project root** (where `template.yaml` lives), not from `src/`:
 
-```bash
-dotnet lambda deploy-serverless \
-  --template template.yaml \
-  --stack-name brewvio \
-  --s3-bucket aws-sam-cli-managed-default-samclisourcebucket-xczut1dcayng \
+```powershell
+dotnet lambda deploy-serverless --template template.yaml --stack-name brewvio --s3-bucket aws-sam-cli-managed-default-samclisourcebucket-xczut1dcayng --region ap-southeast-2
+```
+
+Or with PowerShell backtick line continuation:
+
+```powershell
+dotnet lambda deploy-serverless `
+  --template template.yaml `
+  --stack-name brewvio `
+  --s3-bucket aws-sam-cli-managed-default-samclisourcebucket-xczut1dcayng `
   --region ap-southeast-2
 ```
 
@@ -171,7 +174,7 @@ Outputs after deploy:
 
 ### Publish the frontend
 
-```bash
+```powershell
 aws s3 sync src/wwwroot/ s3://brewvio-frontendbucket-15gnfq4gkjf0/ --delete
 
 # Invalidate CloudFront cache so changes are served immediately:
