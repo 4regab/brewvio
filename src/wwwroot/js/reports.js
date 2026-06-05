@@ -105,13 +105,9 @@ window.Views = window.Views || {};
 
           const s = r.summary;
 
-          // 4 KPI cards — with delta indicators
-          const avgGrowthPct = 12.2; // placeholder until API supports period-over-period
-          const salesDelta = s.totalSales * (avgGrowthPct / 100);
-          const itemsDelta = Math.round(s.itemsSold * 0.1);
-
-          kpiGrid.appendChild(kpiCard('bi-graph-up-arrow', 'Total Sales Amount', money(s.totalSales), null, salesDelta, avgGrowthPct));
-          kpiGrid.appendChild(kpiCard('bi-box-seam', 'Total Product Sales', String(s.itemsSold), 'Items', itemsDelta, 10));
+          // KPI cards — real data only, no fake growth placeholders
+          kpiGrid.appendChild(kpiCard('bi-graph-up-arrow', 'Total Sales Amount', money(s.totalSales), null, null, null));
+          kpiGrid.appendChild(kpiCard('bi-box-seam', 'Total Product Sales', String(s.itemsSold), 'Items', null, null));
           kpiGrid.appendChild(kpiCard('bi-receipt', 'Total Transactions', String(s.transactionCount), 'Orders', null, null));
 
           // Graph section: always visible
@@ -120,11 +116,10 @@ window.Views = window.Views || {};
             const trendCanvas = el('canvas');
 
             // Summary stat cards sit below the chart inside the same card
-            const growth = s.totalSales * 0.12;
             const summaryInner = el('div', { class: 'rpt-chart-summary' },
               summaryCard('Amount', money(s.totalSales), currency()),
-              summaryCard('Growth', (growth >= 0 ? '+ ' : '- ') + money(Math.abs(growth)), currency()),
-              summaryCard('Growth Percentage', Number(12.2).toFixed(1), 'Percent (%)'));
+              summaryCard('Avg Order Value', money(s.averageOrderValue), currency()),
+              summaryCard('Profit Margin', Number(s.profitMarginPercent || 0).toFixed(1), 'Percent (%)'));
 
             // Metric selector dropdown for the chart
             const metricSelect = el('select', { class: 'rpt-chart-select', onChange: () => switchMetric() });
@@ -243,49 +238,49 @@ window.Views = window.Views || {};
         const IMG_BASE = 'img/';
         const n = (name || '').trim().toLowerCase();
         const c = (category || '').toLowerCase();
-        if (n.includes('americano')) return IMG_BASE + 'Cold Brew Coffee/Americano.png';
-        if (n.includes('caramel macchiato')) return IMG_BASE + 'Cold Brew Coffee/Caramel Macchiato.png';
-        if (n.includes("chao's") || n.includes("chao")) return IMG_BASE + 'Cold Brew Coffee/Chao_s Coldbrew.png';
-        if (n.includes('cold brew latte')) return IMG_BASE + 'Cold Brew Coffee/Cold Brew Latte.png';
-        if (n.includes('mocha') && c === 'cold brew coffee') return IMG_BASE + 'Cold Brew Coffee/Mocha.png';
-        if (n.includes('spanish latte')) return IMG_BASE + 'Cold Brew Coffee/Spanish Latte.png';
-        if (n.includes('vanilla latte')) return IMG_BASE + 'Cold Brew Coffee/Vanilla Latte.png';
-        if (n.includes('latte') && c === 'cold brew coffee') return IMG_BASE + 'Cold Brew Coffee/Latte.png';
-        if (c === 'cold brew coffee') return IMG_BASE + 'Cold Brew Coffee/Americano.png';
-        if (n.includes('strawberry milk')) return IMG_BASE + 'Non-Coffee/Strawberry Milk.png';
-        if (n.includes('blueberry milk')) return IMG_BASE + 'Non-Coffee/Blueberry Milk.png';
-        if (n.includes('mango cream')) return IMG_BASE + 'Non-Coffee/Mango Cream.png';
-        if (n.includes('iced choco')) return IMG_BASE + 'Non-Coffee/Iced Choco.png';
-        if (n.includes('milky oreo')) return IMG_BASE + 'Non-Coffee/Milky Oreo.png';
-        if (n.includes('berry choco')) return IMG_BASE + 'Non-Coffee/Berry Choco Latte.png';
-        if (c === 'non-coffee') return IMG_BASE + 'Non-Coffee/Strawberry Milk.png';
-        if (n.includes('matcha frappe') || n.includes('matcha frappuccino')) return IMG_BASE + 'Matcha Series/Matcha Frappuccino.png';
-        if (n.includes('dirty matcha')) return IMG_BASE + 'Matcha Series/Dirty Matcha.png';
-        if (n.includes('strawberry matcha')) return IMG_BASE + 'Matcha Series/Strawberry Matcha.png';
-        if (n.includes('matcha')) return IMG_BASE + 'Matcha Series/Matcha Latte.png';
-        if (c === 'matcha series') return IMG_BASE + 'Matcha Series/Matcha Latte.png';
-        if (n.includes('java chip')) return IMG_BASE + 'Frappe/Java Chip.png';
-        if (n.includes('milo dinosaur')) return IMG_BASE + 'Frappe/Milo Dinosaur.png';
-        if (n.includes('frappuccino') || n.includes('frappucino')) return IMG_BASE + 'Frappe/Frappuccino.png';
-        if (n.includes('mocha') && c === 'frappe') return IMG_BASE + 'Frappe/Mocha.png';
-        if (n.includes('frappe') || c === 'frappe') return IMG_BASE + 'Frappe/Strawberry.png';
-        if (n.includes('overload')) return IMG_BASE + 'QIK_S Fried Noodles/Overload/Overload Noodles.png';
-        if (c.includes('noodle') || c.includes('qik')) return IMG_BASE + 'QIK_S Fried Noodles/Plain Noodles.png';
+        if (n.includes('americano')) return IMG_BASE + 'Cold Brew Coffee/Americano.webp';
+        if (n.includes('caramel macchiato')) return IMG_BASE + 'Cold Brew Coffee/Caramel Macchiato.webp';
+        if (n.includes("chao's") || n.includes("chao")) return IMG_BASE + 'Cold Brew Coffee/Chao_s Coldbrew.webp';
+        if (n.includes('cold brew latte')) return IMG_BASE + 'Cold Brew Coffee/Cold Brew Latte.webp';
+        if (n.includes('mocha') && c === 'cold brew coffee') return IMG_BASE + 'Cold Brew Coffee/Mocha.webp';
+        if (n.includes('spanish latte')) return IMG_BASE + 'Cold Brew Coffee/Spanish Latte.webp';
+        if (n.includes('vanilla latte')) return IMG_BASE + 'Cold Brew Coffee/Vanilla Latte.webp';
+        if (n.includes('latte') && c === 'cold brew coffee') return IMG_BASE + 'Cold Brew Coffee/Latte.webp';
+        if (c === 'cold brew coffee') return IMG_BASE + 'Cold Brew Coffee/Americano.webp';
+        if (n.includes('strawberry milk')) return IMG_BASE + 'Non-Coffee/Strawberry Milk.webp';
+        if (n.includes('blueberry milk')) return IMG_BASE + 'Non-Coffee/Blueberry Milk.webp';
+        if (n.includes('mango cream')) return IMG_BASE + 'Non-Coffee/Mango Cream.webp';
+        if (n.includes('iced choco')) return IMG_BASE + 'Non-Coffee/Iced Choco.webp';
+        if (n.includes('milky oreo')) return IMG_BASE + 'Non-Coffee/Milky Oreo.webp';
+        if (n.includes('berry choco')) return IMG_BASE + 'Non-Coffee/Berry Choco Latte.webp';
+        if (c === 'non-coffee') return IMG_BASE + 'Non-Coffee/Strawberry Milk.webp';
+        if (n.includes('matcha frappe') || n.includes('matcha frappuccino')) return IMG_BASE + 'Matcha Series/Matcha Frappuccino.webp';
+        if (n.includes('dirty matcha')) return IMG_BASE + 'Matcha Series/Dirty Matcha.webp';
+        if (n.includes('strawberry matcha')) return IMG_BASE + 'Matcha Series/Strawberry Matcha.webp';
+        if (n.includes('matcha')) return IMG_BASE + 'Matcha Series/Matcha Latte.webp';
+        if (c === 'matcha series') return IMG_BASE + 'Matcha Series/Matcha Latte.webp';
+        if (n.includes('java chip')) return IMG_BASE + 'Frappe/Java Chip.webp';
+        if (n.includes('milo dinosaur')) return IMG_BASE + 'Frappe/Milo Dinosaur.webp';
+        if (n.includes('frappuccino') || n.includes('frappucino')) return IMG_BASE + 'Frappe/Frappuccino.webp';
+        if (n.includes('mocha') && c === 'frappe') return IMG_BASE + 'Frappe/Mocha.webp';
+        if (n.includes('frappe') || c === 'frappe') return IMG_BASE + 'Frappe/Strawberry.webp';
+        if (n.includes('overload')) return IMG_BASE + 'QIK_S Fried Noodles/Overload/Overload Noodles.webp';
+        if (c.includes('noodle') || c.includes('qik')) return IMG_BASE + 'QIK_S Fried Noodles/Plain Noodles.webp';
         if (c === 'food') {
-          if (n.includes('pork tonkatsu')) return IMG_BASE + 'Food/Pork Tonkatsu.png';
-          if (n.includes('chicken tonkatsu')) return IMG_BASE + 'Food/Chicken Tonkatsu.png';
-          if (n.includes('chicken poppers')) return IMG_BASE + 'Food/Chicken Poppers.png';
-          if (n.includes('chicken fingers')) return IMG_BASE + 'Food/Chicken Fingers.png';
-          if (n.includes('crabstick')) return IMG_BASE + 'Food/Crabstick Katsu.png';
-          if (n.includes('spamsilog')) return IMG_BASE + 'Food/Spamsilog.png';
-          if (n.includes('hungarian')) return IMG_BASE + 'Food/Hungarian Silog.png';
-          if (n.includes('tocilog')) return IMG_BASE + 'Food/Tocilog.png';
-          if (n.includes('tapsilog')) return IMG_BASE + 'Food/Tapsilog.png';
-          if (n.includes('sausilog')) return IMG_BASE + 'Food/Sausilog.png';
-          if (n.includes('bacsilog')) return IMG_BASE + 'Food/Bacsilog.png';
-          return IMG_BASE + 'Food/Chicken Tonkatsu.png';
+          if (n.includes('pork tonkatsu')) return IMG_BASE + 'Food/Pork Tonkatsu.webp';
+          if (n.includes('chicken tonkatsu')) return IMG_BASE + 'Food/Chicken Tonkatsu.webp';
+          if (n.includes('chicken poppers')) return IMG_BASE + 'Food/Chicken Poppers.webp';
+          if (n.includes('chicken fingers')) return IMG_BASE + 'Food/Chicken Fingers.webp';
+          if (n.includes('crabstick')) return IMG_BASE + 'Food/Crabstick Katsu.webp';
+          if (n.includes('spamsilog')) return IMG_BASE + 'Food/Spamsilog.webp';
+          if (n.includes('hungarian')) return IMG_BASE + 'Food/Hungarian Silog.webp';
+          if (n.includes('tocilog')) return IMG_BASE + 'Food/Tocilog.webp';
+          if (n.includes('tapsilog')) return IMG_BASE + 'Food/Tapsilog.webp';
+          if (n.includes('sausilog')) return IMG_BASE + 'Food/Sausilog.webp';
+          if (n.includes('bacsilog')) return IMG_BASE + 'Food/Bacsilog.webp';
+          return IMG_BASE + 'Food/Chicken Tonkatsu.webp';
         }
-        return IMG_BASE + 'Cold Brew Coffee/Americano.png';
+        return IMG_BASE + 'Cold Brew Coffee/Americano.webp';
       }
 
       rebuildPeriodRow();

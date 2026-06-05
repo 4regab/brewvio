@@ -109,8 +109,7 @@ dotnet test tests/
 cd tests; dotnet test
 ```
 
-Tests use a shared database per test class with per-test transaction rollbacks — fast (~24s for
-64 tests) and fully isolated. They never touch the dev database. Override the server with
+Tests use a shared database per test class with per-test transaction rollbacks — fast and fully isolated. They never touch the dev database. Override the server with
 `BREWVIO_TEST_PG` (see §1).
 
 > The test harness provisions schema with `EnsureCreated()` rather than running migrations, so
@@ -130,26 +129,68 @@ receipt → dashboard → inventory → menu performance → sign-up → manager
 Architecture: **CloudFront** (one domain) → S3 (static `wwwroot/`) + API Gateway **HTTP API** →
 **Lambda** (ASP.NET Core 10, arm64) → **Supabase Postgres** over SSL. No VPC/NAT/RDS Proxy needed.
 
-### Prerequisites
+### 4a. Automated deploys (GitHub Actions — primary path)
+
+Push to `main` and the pipeline handles everything:
+
+1. Runs the full test suite against a Postgres service container
+2. Deploys the Lambda + infrastructure via `dotnet lambda deploy-serverless`
+3. Syncs `src/wwwroot/` to S3 with correct cache headers
+4. Invalidates CloudFront
+
+Authentication uses **OIDC** — no long-lived AWS keys are stored. GitHub mints a short-lived
+token per run, scoped to this repo and branch only.
+
+#### First-time GitHub Actions setup (once only)
+
+**1. Deploy the OIDC IAM role:**
+
+```powershell
+aws cloudformation deploy `
+  --template-file infra/github-oidc-role.yaml `
+  --stack-name brewvio-github-oidc `
+  --capabilities CAPABILITY_NAMED_IAM `
+  --parameter-overrides GitHubOrg=<your-github-username> `
+  --region ap-southeast-2
+```
+
+**2. Get the role ARN:**
+
+```powershell
+aws cloudformation describe-stacks `
+  --stack-name brewvio-github-oidc `
+  --query "Stacks[0].Outputs" `
+  --region ap-southeast-2
+```
+
+**3. Add these GitHub repository secrets** (Settings → Secrets and variables → Actions):
+
+| Secret | Value |
+|--------|-------|
+| `AWS_DEPLOY_ROLE_ARN` | ARN from step 2 |
+| `FRONTEND_BUCKET` | `brewvio-frontendbucket-15gnfq4gkjf0` |
+| `CLOUDFRONT_DISTRIBUTION_ID` | `E1CWDAT3NI1LSD` |
+
+After that, every push to `main` deploys automatically.
+
+### 4b. Manual deploy (fallback)
+
+Use this if you need to deploy outside of GitHub Actions.
+
+#### Prerequisites
 
 - **AWS CLI v2** — <https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html>
 - **.NET 10 SDK** + Amazon Lambda tools: `dotnet tool install -g Amazon.Lambda.Tools`
 - Configured credentials: `aws configure`
 
-### First-time setup: create SSM secrets (once only)
+#### First-time setup: create SSM secrets (once only)
 
 Before the first deploy, create the two SSM parameters (see §1). After that, redeployments
 **do not require touching SSM** — the Lambda reads them at cold start automatically.
 
-### Deploy the API
+#### Deploy the API
 
 Run from the **project root** (where `template.yaml` lives), not from `src/`:
-
-```powershell
-dotnet lambda deploy-serverless --template template.yaml --stack-name brewvio --s3-bucket aws-sam-cli-managed-default-samclisourcebucket-xczut1dcayng --region ap-southeast-2
-```
-
-Or with PowerShell backtick line continuation:
 
 ```powershell
 dotnet lambda deploy-serverless `
@@ -162,7 +203,7 @@ dotnet lambda deploy-serverless `
 No secrets or keys are passed here. The deployed Lambda reads `/brewvio/DATABASE_URL` and
 `/brewvio/JWT_KEY` from SSM at startup. To use a different SSM path prefix:
 
-```bash
+```powershell
 # add to the command above:
 --template-parameters SsmParameterPath=/my-path
 ```
@@ -172,12 +213,20 @@ Outputs after deploy:
 - `FrontendBucketName` — S3 bucket to upload the SPA into
 - `ApiEndpoint` — direct API Gateway URL (bypasses CloudFront, useful for testing)
 
-### Publish the frontend
+#### Publish the frontend
 
 ```powershell
-aws s3 sync src/wwwroot/ s3://brewvio-frontendbucket-15gnfq4gkjf0/ --delete
+# JS/CSS/img: long-lived cache (files are content-hashed/versioned)
+aws s3 sync src/wwwroot/ s3://brewvio-frontendbucket-15gnfq4gkjf0/ `
+  --delete `
+  --cache-control "max-age=31536000, immutable" `
+  --exclude "index.html"
 
-# Invalidate CloudFront cache so changes are served immediately:
+# index.html: never cached
+aws s3 cp src/wwwroot/index.html s3://brewvio-frontendbucket-15gnfq4gkjf0/index.html `
+  --cache-control "no-store, must-revalidate"
+
+# Invalidate CloudFront cache so changes are served immediately
 aws cloudfront create-invalidation --distribution-id E1CWDAT3NI1LSD --paths "/*"
 ```
 

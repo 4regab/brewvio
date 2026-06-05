@@ -86,6 +86,7 @@ public class OrderServiceTests(SharedTestDb fixture) : IClassFixture<SharedTestD
     {
         using var t = fixture.Begin();
         await DatabaseInitializer.SeedAllOriginalAsync(t.Db);
+        SettingsService.ResetTaxRateCache();
         var (svc, db) = Build(t);
         var latte = db.MenuItems.First(m => m.Name == "Caffe Latte");
 

@@ -8,5 +8,6 @@ public class MenuItem
     public string Category { get; set; } = "";
     public decimal Price { get; set; }
     public bool IsActive { get; set; } = true;
+    public string? ImageUrl { get; set; }
     public ICollection<RecipeIngredient> Recipe { get; set; } = new List<RecipeIngredient>();
 }

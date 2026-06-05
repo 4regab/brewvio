@@ -48,7 +48,7 @@ window.Views = window.Views || {};
   Views.inventory = {
     render: async (root) => {
       root.appendChild(spinner());
-      let items; try { items = await Api.get('/api/inventory'); } catch (e) { root.innerHTML = ''; root.appendChild(empty('bi-exclamation-triangle', e.message)); return; }
+      let items; try { items = await Api.cachedGet('/api/inventory'); } catch (e) { root.innerHTML = ''; root.appendChild(empty('bi-exclamation-triangle', e.message)); return; }
       root.innerHTML = '';
       const isManager = App.state.user && App.state.user.role === 'Manager';
       const low = items.filter((i) => i.lowStock);
@@ -119,7 +119,7 @@ window.Views = window.Views || {};
           onSubmit: async (v) => {
             const payload = { code: v.code, name: v.name, category: v.category, unit: v.unit, stockLevel: i ? i.stockLevel : v.stockLevel, threshold: v.threshold, costPerUnit: i ? i.costPerUnit : 0 };
             if (i) await Api.put('/api/inventory/' + i.id, payload); else await Api.post('/api/inventory', payload);
-            toast('Item saved.'); reload();
+            Api.bustCache('/api/inventory'); toast('Item saved.'); reload();
           },
         });
       }
@@ -131,7 +131,7 @@ window.Views = window.Views || {};
             { name: 'reason', label: 'Reason', type: 'textarea', required: true },
           ],
           submitText: 'Apply adjustment',
-          onSubmit: async (v) => { await Api.post(`/api/inventory/${i.id}/adjust`, { newQuantity: v.newQuantity, reason: v.reason }); toast('Stock adjusted.'); reload(); },
+          onSubmit: async (v) => { await Api.post(`/api/inventory/${i.id}/adjust`, { newQuantity: v.newQuantity, reason: v.reason }); Api.bustCache('/api/inventory'); toast('Stock adjusted.'); reload(); },
         });
       }
     },
@@ -142,7 +142,7 @@ window.Views = window.Views || {};
     render: async (root) => {
       root.appendChild(spinner());
       let items, ingredients, mods;
-      try { [items, ingredients, mods] = await Promise.all([Api.get('/api/menu?includeInactive=true'), Api.get('/api/inventory'), Api.get('/api/menu/modifiers?includeInactive=true')]); }
+      try { [items, ingredients, mods] = await Promise.all([Api.cachedGet('/api/menu?includeInactive=true'), Api.cachedGet('/api/inventory'), Api.cachedGet('/api/menu/modifiers?includeInactive=true')]); }
       catch (e) { root.innerHTML = ''; root.appendChild(empty('bi-exclamation-triangle', e.message)); return; }
       root.innerHTML = '';
       const reload = () => Views.menu.render(root);
@@ -156,7 +156,7 @@ window.Views = window.Views || {};
         el('td', { html: m.isActive ? '<span class="badge badge-soft-success">Active</span>' : '<span class="badge badge-soft-muted">Hidden</span>' }),
         el('td', { class: 'text-end' }, el('div', { class: 'd-flex gap-2 justify-content-end' },
           button('Edit', 'btn-sm btn-outline-secondary', () => itemForm(m)),
-          button(m.isActive ? 'Hide' : 'Show', 'btn-sm btn-light', async () => { await Api.post(`/api/menu/${m.id}/active?active=${!m.isActive}`); reload(); }))))));
+          button(m.isActive ? 'Hide' : 'Show', 'btn-sm btn-light', async () => { await Api.post(`/api/menu/${m.id}/active?active=${!m.isActive}`); Api.bustCache('/api/menu'); reload(); }))))));
       root.appendChild(card(tableWrap([{ t: 'Name' }, { t: 'Category' }, { t: 'Price', end: 1 }, { t: 'Status' }, { t: '', end: 1 }], tb)));
 
       // --- Modifiers ---
@@ -177,7 +177,7 @@ window.Views = window.Views || {};
             { name: 'priceDelta', label: 'Price change', type: 'number', step: '0.01' },
             { name: 'isActive', label: 'Active', type: 'checkbox', default: true },
           ], values: m || {},
-          onSubmit: async (v) => { if (m) await Api.put('/api/menu/modifiers/' + m.id, v); else await Api.post('/api/menu/modifiers', v); toast('Modifier saved.'); reload(); },
+          onSubmit: async (v) => { if (m) await Api.put('/api/menu/modifiers/' + m.id, v); else await Api.post('/api/menu/modifiers', v); Api.bustCache('/api/menu'); toast('Modifier saved.'); reload(); },
         });
       }
 
@@ -210,7 +210,7 @@ window.Views = window.Views || {};
           const recipe = Array.from(recipeWrap.children).filter((r) => r._get).map((r) => r._get()).filter((x) => x.quantity > 0);
           const payload = { name: nameIn.value.trim(), category: catIn.value.trim() || 'Uncategorized', price: Number(priceIn.value) || 0, isActive: activeIn.checked, recipe };
           submit.disabled = true;
-          try { if (item) await Api.put('/api/menu/' + item.id, payload); else await Api.post('/api/menu', payload); closeModal(); toast('Menu item saved.'); reload(); }
+          try { if (item) await Api.put('/api/menu/' + item.id, payload); else await Api.post('/api/menu', payload); Api.bustCache('/api/menu'); closeModal(); toast('Menu item saved.'); reload(); }
           catch (e) { err.textContent = e.message; submit.disabled = false; }
         });
         modal({ title: item ? 'Edit item' : 'Add item', body, footer: [button('Cancel', 'btn-light', closeModal), submit] });

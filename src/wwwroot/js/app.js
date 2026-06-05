@@ -37,17 +37,28 @@ const App = (() => {
     setInterval(updateTopbarDate, 30000);
 
     if (Api.getToken()) {
-      try { await onAuthenticated(await Api.me()); return; } catch { Api.setToken(null); }
+      try {
+        // Fire both requests in parallel — saves one Lambda round-trip on every page load.
+        const [user, store] = await Promise.all([Api.me(), Api.get('/api/settings/store').catch(() => null)]);
+        await onAuthenticated(user, store);
+        return;
+      } catch { Api.setToken(null); }
     }
     Auth.start();
   }
 
   function closeSidebar() { $('#app-shell').classList.remove('nav-open'); }
 
-  async function onAuthenticated(user) {
+  async function onAuthenticated(user, storeData) {
     Auth.clearPoll();
     state.user = user;
-    try { App.store = await Api.get('/api/settings/store'); } catch { App.store = { storeName: 'Chao & Brew', currency: 'PHP', taxRatePercent: 0 }; }
+    // storeData may be passed in from the parallel startup fetch (avoids a second Lambda call).
+    // Fall back to a fresh fetch if called from other paths (e.g. register flow).
+    try {
+      App.store = storeData || await Api.get('/api/settings/store');
+    } catch {
+      App.store = { storeName: 'Chao & Brew', currency: 'PHP', taxRatePercent: 0 };
+    }
     UI.setCurrency(App.store.currency);
     showApp();
   }
@@ -89,6 +100,33 @@ const App = (() => {
     root.innerHTML = '';
     root.removeAttribute('style'); // clear any inline styles set by previous views (e.g. POS sets padding:0)
     root.classList.remove('is-pos'); // clear POS full-height mode
+
+    // Lazy-load manager-only script bundles on first use.
+    // Cashiers never download manage.js or reports.js — saves ~38 KB of parsing.
+    try {
+      if ((id === 'reports' || id === 'performance') && !window._reportsLoaded) {
+        await new Promise((resolve, reject) => {
+          const s = document.createElement('script');
+          s.src = 'js/reports.js?v=20260606j';
+          s.onload = resolve; s.onerror = reject;
+          document.head.appendChild(s);
+        });
+        window._reportsLoaded = true;
+      }
+      if (['inventory', 'menu', 'users', 'settings'].includes(id) && !window._manageLoaded) {
+        await new Promise((resolve, reject) => {
+          const s = document.createElement('script');
+          s.src = 'js/manage.js?v=20260606j';
+          s.onload = resolve; s.onerror = reject;
+          document.head.appendChild(s);
+        });
+        window._manageLoaded = true;
+      }
+    } catch (e) {
+      root.appendChild(UI.empty('bi-exclamation-triangle', 'Failed to load view resources. Please refresh.'));
+      return;
+    }
+
     const view = window.Views[id];
     if (!view) { root.appendChild(UI.empty('bi-question-circle', 'View not found.')); return; }
     try { await view.render(root); } catch (e) { root.innerHTML = ''; root.appendChild(UI.empty('bi-exclamation-triangle', e.message || 'Failed to load view.')); }

@@ -15,76 +15,76 @@ window.Views = window.Views || {};
     const c = (item.category || '').toLowerCase();
 
     // Cold Coffee
-    if (n.includes('americano')) return IMG_BASE + 'Cold Brew Coffee/Americano.png';
-    if (n.includes('caramel macchiato')) return IMG_BASE + 'Cold Brew Coffee/Caramel Macchiato.png';
-    if (n.includes("chao's") || n.includes("chao")) return IMG_BASE + 'Cold Brew Coffee/Chao_s Coldbrew.png';
-    if (n.includes('cold brew latte')) return IMG_BASE + 'Cold Brew Coffee/Cold Brew Latte.png';
-    if (n.includes('mocha') && c === 'cold coffee') return IMG_BASE + 'Cold Brew Coffee/Mocha.png';
-    if (n.includes('spanish latte')) return IMG_BASE + 'Cold Brew Coffee/Spanish Latte.png';
-    if (n.includes('vanilla latte')) return IMG_BASE + 'Cold Brew Coffee/Vanilla Latte.png';
-    if (n.includes('latte') && c === 'cold coffee') return IMG_BASE + 'Cold Brew Coffee/Latte.png';
-    if (c === 'cold coffee') return IMG_BASE + 'Cold Brew Coffee/Americano.png';
+    if (n.includes('americano')) return IMG_BASE + 'Cold Brew Coffee/Americano.webp';
+    if (n.includes('caramel macchiato')) return IMG_BASE + 'Cold Brew Coffee/Caramel Macchiato.webp';
+    if (n.includes("chao's") || n.includes("chao")) return IMG_BASE + 'Cold Brew Coffee/Chao_s Coldbrew.webp';
+    if (n.includes('cold brew latte')) return IMG_BASE + 'Cold Brew Coffee/Cold Brew Latte.webp';
+    if (n.includes('mocha') && c === 'cold coffee') return IMG_BASE + 'Cold Brew Coffee/Mocha.webp';
+    if (n.includes('spanish latte')) return IMG_BASE + 'Cold Brew Coffee/Spanish Latte.webp';
+    if (n.includes('vanilla latte')) return IMG_BASE + 'Cold Brew Coffee/Vanilla Latte.webp';
+    if (n.includes('latte') && c === 'cold coffee') return IMG_BASE + 'Cold Brew Coffee/Latte.webp';
+    if (c === 'cold coffee') return IMG_BASE + 'Cold Brew Coffee/Americano.webp';
 
     // Non-Coffee
-    if (n.includes('strawberry milk')) return IMG_BASE + 'Non-Coffee/Strawberry Milk.png';
-    if (n.includes('blueberry milk')) return IMG_BASE + 'Non-Coffee/Blueberry Milk.png';
-    if (n.includes('mango cream')) return IMG_BASE + 'Non-Coffee/Mango Cream.png';
-    if (n.includes('iced choco')) return IMG_BASE + 'Non-Coffee/Iced Choco.png';
-    if (n.includes('milky oreo')) return IMG_BASE + 'Non-Coffee/Milky Oreo.png';
-    if (n.includes('berry choco')) return IMG_BASE + 'Non-Coffee/Berry Choco Latte.png';
-    if (c === 'non-coffee') return IMG_BASE + 'Non-Coffee/Strawberry Milk.png';
+    if (n.includes('strawberry milk')) return IMG_BASE + 'Non-Coffee/Strawberry Milk.webp';
+    if (n.includes('blueberry milk')) return IMG_BASE + 'Non-Coffee/Blueberry Milk.webp';
+    if (n.includes('mango cream')) return IMG_BASE + 'Non-Coffee/Mango Cream.webp';
+    if (n.includes('iced choco')) return IMG_BASE + 'Non-Coffee/Iced Choco.webp';
+    if (n.includes('milky oreo')) return IMG_BASE + 'Non-Coffee/Milky Oreo.webp';
+    if (n.includes('berry choco')) return IMG_BASE + 'Non-Coffee/Berry Choco Latte.webp';
+    if (c === 'non-coffee') return IMG_BASE + 'Non-Coffee/Strawberry Milk.webp';
 
     // Matcha Series
-    if (n.includes('matcha frappe') || n.includes('matcha frappuccino')) return IMG_BASE + 'Matcha Series/Matcha Frappuccino.png';
-    if (n.includes('dirty matcha')) return IMG_BASE + 'Matcha Series/Dirty Matcha.png';
-    if (n.includes('strawberry matcha')) return IMG_BASE + 'Matcha Series/Strawberry Matcha.png';
-    if (n.includes('matcha')) return IMG_BASE + 'Matcha Series/Matcha Latte.png';
-    if (c === 'matcha series') return IMG_BASE + 'Matcha Series/Matcha Latte.png';
+    if (n.includes('matcha frappe') || n.includes('matcha frappuccino')) return IMG_BASE + 'Matcha Series/Matcha Frappuccino.webp';
+    if (n.includes('dirty matcha')) return IMG_BASE + 'Matcha Series/Dirty Matcha.webp';
+    if (n.includes('strawberry matcha')) return IMG_BASE + 'Matcha Series/Strawberry Matcha.webp';
+    if (n.includes('matcha')) return IMG_BASE + 'Matcha Series/Matcha Latte.webp';
+    if (c === 'matcha series') return IMG_BASE + 'Matcha Series/Matcha Latte.webp';
 
     // Frappe
-    if (n.includes('java chip')) return IMG_BASE + 'Frappe/Java Chip.png';
-    if (n.includes('milo dinosaur')) return IMG_BASE + 'Frappe/Milo Dinosaur.png';
-    if (n.includes('frappuccino') || n.includes('frappucino')) return IMG_BASE + 'Frappe/Frappuccino.png';
-    if (n.includes('mocha') && c === 'frappe') return IMG_BASE + 'Frappe/Mocha.png';
-    if (n.includes('frappe') || c === 'frappe') return IMG_BASE + 'Frappe/Strawberry.png';
+    if (n.includes('java chip')) return IMG_BASE + 'Frappe/Java Chip.webp';
+    if (n.includes('milo dinosaur')) return IMG_BASE + 'Frappe/Milo Dinosaur.webp';
+    if (n.includes('frappuccino') || n.includes('frappucino')) return IMG_BASE + 'Frappe/Frappuccino.webp';
+    if (n.includes('mocha') && c === 'frappe') return IMG_BASE + 'Frappe/Mocha.webp';
+    if (n.includes('frappe') || c === 'frappe') return IMG_BASE + 'Frappe/Strawberry.webp';
 
     // Qik's Fried Noodles — Overload
-    if (n.includes('overload') && n.includes('korean')) return IMG_BASE + 'QIK_S Fried Noodles/Overload/Overload Noodles w(2) Korean Sausage.png';
-    if (n.includes('overload') && n.includes('jap')) return IMG_BASE + 'QIK_S Fried Noodles/Overload/Overload Noodles w(4) Jap Siomai.png';
-    if (n.includes('overload') && n.includes('pork')) return IMG_BASE + 'QIK_S Fried Noodles/Overload/Overload Noodles w(4) Pork Siomai.png';
-    if (n.includes('overload') && n.includes('egg')) return IMG_BASE + 'QIK_S Fried Noodles/Overload/Overload with 2 Eggs.png';
-    if (n.includes('overload')) return IMG_BASE + 'QIK_S Fried Noodles/Overload/Overload Noodles.png';
+    if (n.includes('overload') && n.includes('korean')) return IMG_BASE + 'QIK_S Fried Noodles/Overload/Overload Noodles w(2) Korean Sausage.webp';
+    if (n.includes('overload') && n.includes('jap')) return IMG_BASE + 'QIK_S Fried Noodles/Overload/Overload Noodles w(4) Jap Siomai.webp';
+    if (n.includes('overload') && n.includes('pork')) return IMG_BASE + 'QIK_S Fried Noodles/Overload/Overload Noodles w(4) Pork Siomai.webp';
+    if (n.includes('overload') && n.includes('egg')) return IMG_BASE + 'QIK_S Fried Noodles/Overload/Overload with 2 Eggs.webp';
+    if (n.includes('overload')) return IMG_BASE + 'QIK_S Fried Noodles/Overload/Overload Noodles.webp';
 
     // Qik's Fried Noodles — Regular
-    if (n.includes('korean sausage')) return IMG_BASE + 'QIK_S Fried Noodles/Noodles with Korean Sausage.png';
-    if (n.includes('japanese siomai')) return IMG_BASE + 'QIK_S Fried Noodles/Noodles with Japanese Siomai.png';
-    if (n.includes('pork siomai')) return IMG_BASE + 'QIK_S Fried Noodles/Noodles with Pork Siomai.png';
-    if (n.includes('with egg')) return IMG_BASE + 'QIK_S Fried Noodles/Noodles with Egg.png';
-    if (n.includes('plain')) return IMG_BASE + 'QIK_S Fried Noodles/Plain Noodles.png';
-    if (c.includes('noodle') || c.includes('qik')) return IMG_BASE + 'QIK_S Fried Noodles/Plain Noodles.png';
+    if (n.includes('korean sausage')) return IMG_BASE + 'QIK_S Fried Noodles/Noodles with Korean Sausage.webp';
+    if (n.includes('japanese siomai')) return IMG_BASE + 'QIK_S Fried Noodles/Noodles with Japanese Siomai.webp';
+    if (n.includes('pork siomai')) return IMG_BASE + 'QIK_S Fried Noodles/Noodles with Pork Siomai.webp';
+    if (n.includes('with egg')) return IMG_BASE + 'QIK_S Fried Noodles/Noodles with Egg.webp';
+    if (n.includes('plain')) return IMG_BASE + 'QIK_S Fried Noodles/Plain Noodles.webp';
+    if (c.includes('noodle') || c.includes('qik')) return IMG_BASE + 'QIK_S Fried Noodles/Plain Noodles.webp';
 
     // Fruit Soda
-    if (n.includes('soda') || c === 'fruit soda') return IMG_BASE + 'Non-Coffee/Strawberry Milk.png';
+    if (n.includes('soda') || c === 'fruit soda') return IMG_BASE + 'Non-Coffee/Strawberry Milk.webp';
 
     // Food — individual image mapping
     if (c === 'food') {
-      if (n.includes('pork tonkatsu'))    return IMG_BASE + 'Food/Pork Tonkatsu.png';
-      if (n.includes('chicken tonkatsu')) return IMG_BASE + 'Food/Chicken Tonkatsu.png';
-      if (n.includes('chicken poppers'))  return IMG_BASE + 'Food/Chicken Poppers.png';
-      if (n.includes('chicken fingers'))  return IMG_BASE + 'Food/Chicken Fingers.png';
-      if (n.includes('crabstick'))        return IMG_BASE + 'Food/Crabstick Katsu.png';
-      if (n.includes('spamsilog'))        return IMG_BASE + 'Food/Spamsilog.png';
-      if (n.includes('hungarian') || n.includes('hungariansilog')) return IMG_BASE + 'Food/Hungarian Silog.png';
-      if (n.includes('tocilog'))          return IMG_BASE + 'Food/Tocilog.png';
-      if (n.includes('tapsilog'))         return IMG_BASE + 'Food/Tapsilog.png';
-      if (n.includes('sausilog'))         return IMG_BASE + 'Food/Sausilog.png';
-      if (n.includes('bacsilog'))         return IMG_BASE + 'Food/Bacsilog.png';
+      if (n.includes('pork tonkatsu'))    return IMG_BASE + 'Food/Pork Tonkatsu.webp';
+      if (n.includes('chicken tonkatsu')) return IMG_BASE + 'Food/Chicken Tonkatsu.webp';
+      if (n.includes('chicken poppers'))  return IMG_BASE + 'Food/Chicken Poppers.webp';
+      if (n.includes('chicken fingers'))  return IMG_BASE + 'Food/Chicken Fingers.webp';
+      if (n.includes('crabstick'))        return IMG_BASE + 'Food/Crabstick Katsu.webp';
+      if (n.includes('spamsilog'))        return IMG_BASE + 'Food/Spamsilog.webp';
+      if (n.includes('hungarian') || n.includes('hungariansilog')) return IMG_BASE + 'Food/Hungarian Silog.webp';
+      if (n.includes('tocilog'))          return IMG_BASE + 'Food/Tocilog.webp';
+      if (n.includes('tapsilog'))         return IMG_BASE + 'Food/Tapsilog.webp';
+      if (n.includes('sausilog'))         return IMG_BASE + 'Food/Sausilog.webp';
+      if (n.includes('bacsilog'))         return IMG_BASE + 'Food/Bacsilog.webp';
       // Generic food fallback
-      return IMG_BASE + 'Food/Chicken Tonkatsu.png';
+      return IMG_BASE + 'Food/Chicken Tonkatsu.webp';
     }
 
     // Fallback — use a non-coffee default to avoid confusion
-    return IMG_BASE + 'Cold Brew Coffee/Americano.png';
+    return IMG_BASE + 'Cold Brew Coffee/Americano.webp';
   }
 
   // Category icon mapping — Chao & Brew categories
@@ -109,8 +109,8 @@ window.Views = window.Views || {};
   function totals() {
     const subtotal = cart.reduce((s, l) => s + lineTotal(l), 0);
     const disc = Math.min(discount || 0, subtotal);
-    const tax = Math.round((subtotal - disc) * taxRate()) / 100;
-    return { subtotal, disc, tax, total: subtotal - disc + tax };
+    const tax = Math.round((subtotal - disc) * taxRate() / (100 + taxRate()));
+    return { subtotal, disc, tax, total: subtotal - disc };
   }
 
   function addToCart(item) {
@@ -140,7 +140,7 @@ window.Views = window.Views || {};
     // Item header
     const header = el('div', { class: 'cust-header' },
       el('div', { class: 'cust-thumb' },
-        el('img', { src: line.img || IMG_BASE + 'Cold Brew Coffee/Americano.png', alt: line.name })),
+        el('img', { src: line.img || IMG_BASE + 'Cold Brew Coffee/Americano.webp', alt: line.name })),
       el('div', { class: 'cust-info' },
         el('div', { class: 'cust-name', text: line.name }),
         el('div', { class: 'cust-base-price', text: 'Base: ' + money(line.price) })));
@@ -238,7 +238,7 @@ window.Views = window.Views || {};
     cart.forEach((l) => {
       const row = el('div', { class: 'cart-line' },
         el('div', { class: 'cart-line-thumb' },
-          el('img', { src: l.img || IMG_BASE + 'latte.png', alt: l.name })),
+          el('img', { src: l.img || IMG_BASE + 'latte.webp', alt: l.name })),
         el('div', { class: 'cart-line-body' },
           el('div', { class: 'cart-line-top' },
             el('div', { class: 'item-name', text: l.name }),
@@ -333,6 +333,8 @@ window.Views = window.Views || {};
           payments: [{ method, amount: tendered }],
         });
         cart = []; discount = 0; if (promoInputEl) promoInputEl.value = ''; if (discountSelect) discountSelect.value = '0'; renderCart();
+        // Bust inventory cache — stock levels changed after the sale
+        Api.bustCache('/api/inventory');
         // Update order number for next order
         try { const nr = await Api.get('/api/orders/next-number'); cartOrderNumEl.textContent = 'Order Number: #' + String(nr.nextId).padStart(3, '0'); } catch { /* non-critical */ }
         (receipt.stockWarnings || []).forEach((w) => toast(w, 'warning'));
@@ -420,7 +422,7 @@ window.Views = window.Views || {};
       root.innerHTML = '';
       root.appendChild(spinner('Loading menu...'));
 
-      try { [menu, modifiers] = await Promise.all([Api.get('/api/menu'), Api.get('/api/menu/modifiers')]); }
+      try { [menu, modifiers] = await Promise.all([Api.cachedGet('/api/menu'), Api.cachedGet('/api/menu/modifiers')]); }
       catch (e) { root.innerHTML = ''; root.appendChild(empty('bi-exclamation-triangle', e.message)); return; }
       root.innerHTML = '';
 
@@ -741,6 +743,7 @@ window.Views = window.Views || {};
       }
 
       let historyList = [];
+      let historyTake = 100; // start with 100 records; user can load more
       function renderHistoryList() {
         const filtered = historyList.filter((tx) => {
           if (filter === 'Active') return tx.status === 'Pending' || tx.status === 'Preparing';
@@ -768,18 +771,28 @@ window.Views = window.Views || {};
             el('td', { class: 'text-end fw-semibold', text: money(tx.totalAmount) }),
             el('td', { class: 'text-end' }, actions)));
         });
+
+        // "Load more" — only shown when we got a full page (more may exist)
+        const loadMoreBtn = historyList.length >= historyTake
+          ? button(`Load more (showing ${historyList.length})`, 'btn-sm btn-outline-secondary mt-2 w-100', async () => {
+              historyTake += 100;
+              await renderHistory();
+            })
+          : el('div', { class: 'text-center text-muted small mt-2', text: `Showing all ${historyList.length} records` });
+
         content.innerHTML = '';
         content.appendChild(el('div', { class: 'section-card p-0' },
           el('div', { class: 'table-responsive' },
             el('table', { class: 'table align-middle mb-0' },
               el('thead', {}, el('tr', {}, ...['#', 'Date & Time', 'Cashier', 'Order', 'Status', 'Total', ''].map((h) => el('th', { class: (h === 'Total' || h === '') ? 'text-end' : '', text: h })))),
               tbody))));
+        content.appendChild(loadMoreBtn);
       }
 
       async function renderHistory() {
         content.innerHTML = ''; content.appendChild(spinner());
-        const fromDate = isoDaysAgo(30);
-        try { historyList = await Api.get(`/api/orders/recent?take=500&from=${fromDate}`); }
+        const fromDate = isoDaysAgo(90);
+        try { historyList = await Api.get(`/api/orders/recent?take=${historyTake}&from=${fromDate}`); }
         catch (e) { content.innerHTML = ''; content.appendChild(empty('bi-exclamation-triangle', e.message)); return; }
         renderFilterChips();
         renderHistoryList();

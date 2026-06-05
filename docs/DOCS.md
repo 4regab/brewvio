@@ -140,7 +140,7 @@ CloudFront Distribution (d37i8pbdtw6xf4.cloudfront.net)
   └── /*      → S3 Bucket (static frontend — index.html + JS/CSS/img)
 ```
 
-- **Lambda** runs the entire ASP.NET Core app via `Amazon.Lambda.AspNetCoreServer.Hosting`. Cold starts are ~2–4 s on arm64 / 1 GB.
+- **Lambda** runs the entire ASP.NET Core app via `Amazon.Lambda.AspNetCoreServer.Hosting`. Cold starts are ~1–3 s on arm64 / 1769 MB (2 vCPUs allocated).
 - **Supabase** provides managed Postgres. The app connects through the **Supavisor transaction pooler** (port 6543) with `MaxAutoPrepare=0` and client-side connection pooling disabled (connections go stale in frozen Lambda processes).
 - **Optimistic concurrency** on `Ingredient.StockLevel` uses PostgreSQL's `xmin` system column so concurrent orders can't silently oversell stock.
 - **Secrets** (`DATABASE_URL`, `JWT_KEY`) are stored in **AWS SSM Parameter Store** as SecureString and loaded at Lambda cold-start via `Amazon.Extensions.Configuration.SystemsManager`.
@@ -1051,7 +1051,13 @@ Append-only action log. `Add()` enqueues a row on the shared DbContext (committe
 
 ## 10. Frontend
 
-The frontend is a vanilla JS SPA served from S3/CloudFront. No build step — plain ES2020 modules loaded via `<script>` tags.
+The frontend is a vanilla JS SPA served from S3/CloudFront. No build step — plain ES2020 loaded via `<script defer>` tags.
+
+### Script loading
+
+All scripts use `defer` so they download in parallel while HTML parses. `manage.js` and `reports.js` are **not** included in the initial page load — they are injected dynamically on first navigation to their respective views (lazy loading). This means cashier sessions never download or parse ~38 KB of manager-only code.
+
+`index.html` also includes `<link rel="preload">` hints for `/api/auth/me` and `/api/settings/store` so the browser starts those Lambda requests before JS even finishes loading.
 
 ### Routing
 
@@ -1072,15 +1078,27 @@ The frontend is a vanilla JS SPA served from S3/CloudFront. No build step — pl
 
 ### JS files
 
-| File | Exports | Description |
-|---|---|---|
-| `api.js` | `Api` | Thin fetch wrapper. Attaches JWT, parses JSON, surfaces `message` from error responses, dispatches `brewvio:unauthorized` on 401 |
-| `ui.js` | `UI` | `el()` DOM builder, `modal()` (Bootstrap wrapper), `toast()`, `spinner()`, `empty()`, `lineChart()`, `barChart()`, `doughnutChart()`, `money()`, `dateTime()` |
-| `app.js` | `App` | Hash router, auth gate, sidebar nav, topbar clock, loads `App.store` (settings) on startup |
-| `auth.js` | `Views.login`, `Views.register`, `Views.waiting` | Login form, registration form, approval polling |
-| `pos.js` | `Views.pos`, `Views.activity` | POS screen (menu grid, cart, payment modal, draft save), Orders page (queue / history / drafts tabs) |
-| `manage.js` | `Views.inventory`, `Views.menu`, `Views.users`, `Views.settings` | All manager admin views |
-| `reports.js` | `Views.reports`, `Views.performance` | Report chart, KPI cards, best sellers table, period selector |
+| File | Exports | Loaded | Description |
+|---|---|---|---|
+| `api.js` | `Api` | Always | Fetch wrapper. Attaches JWT, parses JSON, surfaces `message` from error responses, dispatches `brewvio:unauthorized` on 401. Includes a 2-minute in-memory GET cache (`cachedGet`) and a `bustCache(prefix)` helper. |
+| `ui.js` | `UI` | Always | `el()` DOM builder, `modal()` (Bootstrap wrapper), `toast()`, `spinner()`, `empty()`, `lineChart()`, `barChart()`, `doughnutChart()`, `money()`, `dateTime()` |
+| `app.js` | `App` | Always | Hash router, auth gate, sidebar nav, topbar clock. Fires `Api.me()` and `Api.settings/store` in parallel on startup. Lazy-loads `manage.js` and `reports.js` on first navigation to their views. |
+| `auth.js` | `Views.login`, `Views.register`, `Views.waiting` | Always | Login form, registration form, approval polling |
+| `pos.js` | `Views.pos`, `Views.activity` | Always | POS screen (menu grid, cart, payment modal, draft save), Orders page (queue / history / drafts tabs). Order history is paginated at 100 records with a "Load more" button. |
+| `manage.js` | `Views.inventory`, `Views.menu`, `Views.users`, `Views.settings` | Lazy (Manager first nav) | All manager admin views |
+| `reports.js` | `Views.reports`, `Views.performance` | Lazy (Manager first nav) | Report chart, KPI cards, best sellers table, period selector |
+
+### API caching
+
+`Api.cachedGet(url)` caches GET responses in memory for 2 minutes. Used for menu items, modifiers, and inventory — endpoints read frequently but changed infrequently. The cache is busted by calling `Api.bustCache(prefix)` after any mutation:
+
+| Mutation | Cache busted |
+|---|---|
+| Save/toggle menu item or modifier | `/api/menu` |
+| Adjust or save inventory item | `/api/inventory` |
+| Place an order (stock deducted) | `/api/inventory` |
+
+Regular `Api.get()` bypasses the cache and is used for order queues, reports, and other real-time data.
 
 ### UI patterns
 
@@ -1144,8 +1162,9 @@ Defined in `template.yaml` (AWS SAM):
 
 | Resource | Type | Notes |
 |---|---|---|
-| `BrewvioFunction` | `AWS::Serverless::Function` | arm64, .NET 10, 1 GB, 60s timeout |
+| `BrewvioFunction` | `AWS::Serverless::Function` | arm64, .NET 10, 1769 MB (2 vCPUs), 60s timeout |
 | `Api` | `AWS::Serverless::HttpApi` | Throttle: 50 burst / 100 rps |
+| `BrewvioFunctionLogGroup` | `AWS::Logs::LogGroup` | Lambda log group; 1-day retention to minimize CloudWatch cost |
 | `FrontendBucket` | `AWS::S3::Bucket` | Private; CloudFront OAC access only |
 | `Distribution` | `AWS::CloudFront::Distribution` | Single domain: `/api/*` → Lambda, `/*` → S3 |
 
@@ -1159,10 +1178,16 @@ sam deploy --stack-name brewvio --resolve-s3 --capabilities CAPABILITY_IAM --no-
 ### Deploy frontend only
 
 ```bash
-# Upload changed files to S3
-aws s3 sync src/wwwroot/ s3://<bucket-name>/ --delete
+# Upload JS/CSS/img with long-lived immutable cache (safe — files are versioned)
+aws s3 sync src/wwwroot/ s3://<bucket-name>/ --delete \
+  --cache-control "max-age=31536000, immutable" \
+  --exclude "index.html"
 
-# Invalidate CloudFront cache
+# index.html must never be cached — it is the SPA entry point
+aws s3 cp src/wwwroot/index.html s3://<bucket-name>/index.html \
+  --cache-control "no-store, must-revalidate"
+
+# Invalidate CloudFront edge caches
 aws cloudfront create-invalidation --distribution-id <id> --paths "/*"
 ```
 

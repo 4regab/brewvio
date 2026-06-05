@@ -1,4 +1,6 @@
-// Thin API client: attaches the JWT, parses JSON, and surfaces server error messages.
+// Thin API client: attaches the JWT, parses JSON, surfaces server error messages, and
+// provides a short-lived in-memory cache for read-heavy GET endpoints (menu, inventory, etc.)
+// to avoid re-hitting Lambda on every view navigation.
 const Api = (() => {
   const TOKEN_KEY = 'brewvio_token';
   let token = localStorage.getItem(TOKEN_KEY) || null;
@@ -10,6 +12,25 @@ const Api = (() => {
   const setToken = (t) => { token = t; t ? localStorage.setItem(TOKEN_KEY, t) : localStorage.removeItem(TOKEN_KEY); };
   const getToken = () => token;
   const authHeader = () => (token ? { Authorization: 'Bearer ' + token } : {});
+
+  // ── In-memory TTL cache ──────────────────────────────────────────────────────
+  // Only used for safe, idempotent GET endpoints that don't change frequently.
+  // TTL: 2 minutes. Bust manually after mutations via bustCache(urlPrefix).
+  const CACHE_TTL_MS = 2 * 60 * 1000;
+  const _cache = new Map();
+
+  function bustCache(prefix) {
+    for (const key of _cache.keys()) {
+      if (key.startsWith(prefix)) _cache.delete(key);
+    }
+  }
+
+  function cachedGet(url) {
+    const entry = _cache.get(url);
+    if (entry && (Date.now() - entry.ts) < CACHE_TTL_MS) return Promise.resolve(entry.data);
+    return request('GET', url).then((data) => { _cache.set(url, { data, ts: Date.now() }); return data; });
+  }
+  // ─────────────────────────────────────────────────────────────────────────────
 
   async function request(method, url, body) {
     const headers = { ...authHeader() };
@@ -44,11 +65,11 @@ const Api = (() => {
     a.href = URL.createObjectURL(blob);
     a.download = m ? decodeURIComponent(m[1]) : fallbackName;
     document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
   }
 
   return {
-    ApiError, setToken, getToken, download,
+    ApiError, setToken, getToken, download, bustCache, cachedGet,
     get: (u) => request('GET', u),
     post: (u, b) => request('POST', u, b ?? {}),
     put: (u, b) => request('PUT', u, b ?? {}),

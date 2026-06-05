@@ -1,7 +1,8 @@
-// Auth flow controller — renders the multi-screen sign-in / sign-up / approval experience
-// Screens: role → (login | signup) → authenticating (poll /auth/status) → approved
+// Auth flow controller
+// Entry: login screen (role toggled inline) → authenticating → approved/rejected
+// Sign-up available via footer link.
 const Auth = (() => {
-  const { el, button, toast } = UI;
+  const { el, button } = UI;
   let pollTimer = null;
 
   const root = () => document.getElementById('auth-root');
@@ -18,53 +19,43 @@ const Auth = (() => {
     r.appendChild(node);
   }
 
-  function setBusy(btn, on, busyLabel) {
+  function setBusy(btn, on, label) {
     if (!btn) return;
-    if (on) { btn.dataset.label = btn.innerHTML; btn.disabled = true; btn.innerHTML = `<span class="spinner-border spinner-border-sm me-2"></span>${busyLabel || 'Please wait…'}`; }
-    else { btn.disabled = false; if (btn.dataset.label) btn.innerHTML = btn.dataset.label; }
+    if (on) { btn.dataset.label = btn.innerHTML; btn.disabled = true; btn.innerHTML = `<span class="spinner-border spinner-border-sm me-2"></span>${label || 'Please wait…'}`; }
+    else    { btn.disabled = false; if (btn.dataset.label) btn.innerHTML = btn.dataset.label; }
   }
 
-  // Wrapped input with icon
-  function iconInput(icon, inputEl) {
-    const wrap = el('div', { class: 'auth-input-wrap' });
-    wrap.appendChild(el('i', { class: 'bi ' + icon + ' auth-input-icon' }));
-    wrap.appendChild(inputEl);
-    return wrap;
+  function field(labelText, inputEl) {
+    return el('div', { class: 'mb-3' },
+      el('label', { class: 'auth-label', text: labelText }),
+      inputEl);
   }
 
-  // ---------- Screen 1: Role selection ----------
-  function roleScreen() {
-    const pick = (role) => loginScreen(role);
-    const roleCard = (role, icon, blurb) => el('button', { class: 'role-card', onClick: () => pick(role) },
-      el('div', { class: 'role-icon' }, el('i', { class: 'bi ' + icon })),
-      el('div', { class: 'role-name', text: role }),
-      el('div', { class: 'role-blurb', text: blurb }),
-      el('span', { class: 'role-go', html: 'Continue <i class="bi bi-arrow-right"></i>' }));
+  // ---------- Login screen ----------
+  function loginScreen(role = 'Cashier') {
+    const user = el('input', { class: 'form-control', autocomplete: 'username', placeholder: 'Enter your username' });
+    const pass = el('input', { type: 'password', class: 'form-control', autocomplete: 'current-password', placeholder: 'Enter your password' });
 
-    mount(el('div', { class: 'auth-card' },
-      el('div', { class: 'auth-head' },
-        el('h2', { class: 'auth-title', text: 'Welcome!' }),
-        el('p', { class: 'auth-sub', text: 'Who is logging in?' })),
-      el('div', { class: 'role-grid' },
-        roleCard('Manager', 'bi-person-badge', 'Full access: POS, inventory, reports & staff.'),
-        roleCard('Cashier', 'bi-cup-hot', 'Take orders & print receipts.')),
-      el('div', { class: 'auth-foot mt-3' },
-        el('span', { text: "Don't have an account? " }),
-        el('a', { href: '#', class: 'auth-link', onClick: (e) => { e.preventDefault(); signupScreen('Cashier'); } }, 'Sign Up'))));
-  }
+    // Show/hide password toggle
+    const pwToggle = el('button', { type: 'button', class: 'auth-pw-toggle', 'aria-label': 'Show password' },
+      el('i', { class: 'bi bi-eye' }));
+    pwToggle.addEventListener('click', () => {
+      const show = pass.type === 'password';
+      pass.type = show ? 'text' : 'password';
+      pwToggle.querySelector('i').className = show ? 'bi bi-eye-slash' : 'bi bi-eye';
+    });
 
-  // ---------- Screen 2a: Log in ----------
-  function loginScreen(role) {
-    const user = el('input', { class: 'form-control', autocomplete: 'off', placeholder: 'Name' });
-    const pass = el('input', { type: 'password', class: 'form-control', autocomplete: 'new-password', placeholder: 'Password' });
     const err  = el('div', { class: 'auth-error d-none' });
-    const submit = button('Log In', 'btn-primary w-100');
+    const submit = button('Sign In', 'btn-primary w-100');
     submit.type = 'submit';
 
     const form = el('form', { class: 'auth-form', onSubmit: async (e) => {
       e.preventDefault();
       err.classList.add('d-none');
-      if (!user.value.trim() || !pass.value) { err.textContent = 'Enter your username and password.'; err.classList.remove('d-none'); return; }
+      if (!user.value.trim() || !pass.value) {
+        err.textContent = 'Please enter your username and password.';
+        err.classList.remove('d-none'); return;
+      }
       setBusy(submit, true, 'Signing in…');
       try {
         const res = await Api.login(user.value.trim(), pass.value);
@@ -75,26 +66,27 @@ const Auth = (() => {
         if (/awaiting/i.test(ex.message)) { authenticatingScreen(user.value.trim(), role); return; }
         err.textContent = ex.message; err.classList.remove('d-none');
       }
-    } },
-      iconInput('bi-person', user),
-      iconInput('bi-lock', pass),
-      err, submit);
+    }},
+      el('div', { class: 'auth-input-wrap' },
+        el('i', { class: 'bi bi-person auth-input-icon' }),
+        user),
+      el('div', { class: 'auth-input-wrap' },
+        el('i', { class: 'bi bi-lock auth-input-icon' }),
+        pass,
+        pwToggle),
+      err,
+      submit);
 
     mount(el('div', { class: 'auth-card' },
-      backRow(() => roleScreen()),
-      el('div', { class: 'auth-head' },
-        el('span', { class: 'auth-pill', text: role + ' sign-in' }),
-        el('h2', { class: 'auth-title', text: 'Log In' })),
-      form,
-      el('div', { class: 'auth-foot' },
-        el('span', { text: "Don't have an account? " }),
-        el('a', { href: '#', class: 'auth-link', onClick: (e) => { e.preventDefault(); signupScreen(role); } }, 'Sign Up')),
-      demoHint()));
-    setTimeout(() => user.focus(), 120);
+      el('h2', { class: 'auth-title', text: 'Welcome back' }),
+      el('p', { class: 'auth-sub', text: 'Sign in to your account' }),
+      form));
+
+    setTimeout(() => user.focus(), 80);
   }
 
-  // ---------- Screen 2b: Sign up ----------
-  function signupScreen(role) {
+  // ---------- Sign-up screen ----------
+  function signupScreen(role = 'Cashier') {
     const full = el('input', { class: 'form-control', placeholder: 'Full name' });
     const user = el('input', { class: 'form-control', autocomplete: 'username', placeholder: 'Username' });
     const pass = el('input', { type: 'password', class: 'form-control', autocomplete: 'new-password', placeholder: 'Password (min 6 characters)' });
@@ -115,83 +107,77 @@ const Auth = (() => {
         await Api.register({ username: user.value.trim(), fullName: full.value.trim(), password: pass.value, role: roleSel.value });
         authenticatingScreen(user.value.trim(), roleSel.value);
       } catch (ex) { setBusy(submit, false); err.textContent = ex.message; err.classList.remove('d-none'); }
-    } },
-      iconInput('bi-person', full),
-      iconInput('bi-person-badge', user),
-      el('div', { class: 'mb-2' },
-        el('label', { class: 'form-label', style: 'color:rgba(255,255,255,.7);font-size:.8rem', text: 'Role' }),
-        roleSel),
-      iconInput('bi-lock', pass),
+    }},
+      field('Full Name', full),
+      field('Username',  user),
+      el('div', { class: 'mb-3' },
+        el('label', { class: 'auth-label', text: 'Role' }), roleSel),
+      field('Password', pass),
       err, submit);
 
     mount(el('div', { class: 'auth-card' },
-      backRow(() => loginScreen(role)),
-      el('div', { class: 'auth-head' },
-        el('span', { class: 'auth-pill', text: 'New account' }),
-        el('h2', { class: 'auth-title', text: 'Sign Up' })),
+      el('button', { class: 'auth-back', type: 'button', onClick: () => loginScreen(role) },
+        el('i', { class: 'bi bi-arrow-left' }), ' Back'),
+      el('h2', { class: 'auth-title', text: 'Sign Up' }),
       form,
       el('div', { class: 'auth-foot' },
         el('span', { text: 'Already have an account? ' }),
         el('a', { href: '#', class: 'auth-link', onClick: (e) => { e.preventDefault(); loginScreen(role); } }, 'Log In'))));
-    setTimeout(() => full.focus(), 120);
+    setTimeout(() => full.focus(), 80);
   }
 
-  // ---------- Screen 3: Authenticating… ----------
+  // ---------- Authenticating (pending approval) ----------
   function authenticatingScreen(username, role) {
-    const statusLine = el('p', { class: 'auth-status-text', text: 'Waiting for a manager to review your request…' });
+    const statusLine = el('p', { class: 'auth-status-text', text: 'Waiting for a manager to approve your account…' });
     mount(el('div', { class: 'auth-card auth-center' },
       el('div', { class: 'auth-spinner mt-2' }, el('span', { class: 'spinner-border' })),
-      el('h2', { class: 'auth-title mt-3', text: 'Authenticating...' }),
-      el('p', { class: 'auth-sub', text: `Signing in as ${username}` }),
+      el('h2', { class: 'auth-title mt-3', text: 'Awaiting Approval' }),
+      el('p',  { class: 'auth-sub', text: `Signed in as ${username}` }),
       statusLine,
       el('div', { class: 'auth-foot mt-4' },
-        el('a', { href: '#', class: 'auth-link', onClick: (e) => { e.preventDefault(); clearPoll(); loginScreen(role); } }, 'Back to login'))));
+        el('a', { href: '#', class: 'auth-link', onClick: (e) => { e.preventDefault(); clearPoll(); loginScreen(role); } }, '← Back to login'))));
 
     let tries = 0;
     const poll = async () => {
       tries++;
       try {
         const s = await Api.accountStatus(username);
-        if (s.status === 'Active')    { clearPoll(); approvedScreen(username, role);  return; }
-        if (s.status === 'Rejected')  { clearPoll(); rejectedScreen(username, role);  return; }
-        statusLine.textContent = `Still pending approval… (checked ${tries}×)`;
+        if (s.status === 'Active')   { clearPoll(); approvedScreen(username, role); return; }
+        if (s.status === 'Rejected') { clearPoll(); rejectedScreen(username, role); return; }
+        statusLine.textContent = `Still pending… (checked ${tries}×)`;
       } catch (ex) {
-        statusLine.textContent = ex.status === 404 ? 'Account not found.' : 'Could not reach the server, retrying…';
+        statusLine.textContent = ex.status === 404 ? 'Account not found.' : 'Could not reach server, retrying…';
       }
     };
-    clearPoll();
-    poll();
+    clearPoll(); poll();
     pollTimer = setInterval(poll, 3000);
   }
 
-  // ---------- Screen 4a: Account approved ----------
+  // ---------- Approved ----------
   function approvedScreen(username, role) {
     mount(el('div', { class: 'auth-card auth-center' },
       el('div', { class: 'auth-success mt-2' }, el('i', { class: 'bi bi-check-lg' })),
       el('h2', { class: 'auth-title mt-3', text: 'Account Approved!' }),
-      el('p', { class: 'auth-sub', text: `Welcome aboard, ${username}. Your account is now active.` }),
-      button('Continue to login', 'btn-primary w-100 mt-2', () => loginScreen(role))));
+      el('p',  { class: 'auth-sub', text: `Welcome, ${username}. Your account is now active.` }),
+      button('Continue to Login', 'btn-primary w-100 mt-2', () => loginScreen(role))));
   }
 
-  // ---------- Screen 4b: Request declined ----------
+  // ---------- Rejected ----------
   function rejectedScreen(username, role) {
     mount(el('div', { class: 'auth-card auth-center' },
       el('div', { class: 'auth-reject mt-2' }, el('i', { class: 'bi bi-x-lg' })),
       el('h2', { class: 'auth-title mt-3', text: 'Request Declined' }),
-      el('p', { class: 'auth-sub', text: 'Your account request was declined. Please contact your manager.' }),
-      button('Back to start', 'btn-outline-secondary w-100 mt-2', () => roleScreen())));
+      el('p',  { class: 'auth-sub', text: 'Your request was declined. Contact your manager.' }),
+      button('Back to Login', 'btn-outline-secondary w-100 mt-2', () => loginScreen(role))));
   }
 
-  // ---------- Helpers ----------
-  const backRow = (onBack) => el('button', { class: 'auth-back', type: 'button', onClick: onBack },
-    el('i', { class: 'bi bi-arrow-left' }), 'Back');
-
+  // Demo credentials hint
   const demoHint = () => el('div', { class: 'auth-demo' },
     el('div', { class: 'auth-demo-title', text: 'Demo accounts' }),
     el('div', { html: 'Manager — <code>manager</code> / <code>Manager@123</code>' }),
     el('div', { html: 'Cashier — <code>cashier</code> / <code>Cashier@123</code>' }));
 
-  function start() { show(); roleScreen(); }
+  function start() { show(); loginScreen(); }
 
   return { start, show, clearPoll };
 })();

@@ -77,8 +77,14 @@ public class SettingsService(BrewvioDbContext db, AuditService audit)
     {
         exportedAt = DateTime.UtcNow,
         users = await db.Users.Select(u => new { u.Id, u.Username, u.FullName, u.Role, u.IsActive }).ToListAsync(),
-        ingredients = await db.Ingredients.AsNoTracking().ToListAsync(),
-        menuItems = await db.MenuItems.AsNoTracking().Include(m => m.Recipe).ToListAsync(),
+        ingredients = await db.Ingredients.AsNoTracking()
+            .Select(i => new { i.Id, i.Code, i.Name, i.Category, i.Unit, i.StockLevel, i.Threshold, i.CostPerUnit }).ToListAsync(),
+        menuItems = await db.MenuItems.AsNoTracking()
+            .Include(m => m.Recipe).ThenInclude(r => r.Ingredient)
+            .Select(m => new {
+                m.Id, m.Name, m.Category, m.Price, m.IsActive, m.ImageUrl,
+                Recipe = m.Recipe.Select(r => new { r.IngredientId, r.Quantity, IngredientName = r.Ingredient.Name })
+            }).ToListAsync(),
         modifiers = await db.Modifiers.AsNoTracking().ToListAsync(),
         transactions = await db.Transactions.AsNoTracking()
             .Include(t => t.Items)

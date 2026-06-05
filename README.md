@@ -43,7 +43,7 @@ Browser → CloudFront
                         Supabase PostgreSQL
 ```
 
-One CloudFront domain serves both the frontend and the API — no CORS. The Lambda connects to Supabase via the Supavisor transaction pooler. Secrets live in SSM Parameter Store, not in environment variables.
+One CloudFront domain serves both the frontend and the API — no CORS. The Lambda connects to Supabase via the Supavisor transaction pooler. Secrets live in SSM Parameter Store, not in environment variables. Lambda runs at 1769 MB (2 vCPUs) for faster cold starts.
 
 ---
 
@@ -90,19 +90,34 @@ dotnet test tests/Brewvio.Tests.csproj
 
 ## Deploy to AWS
 
-```bash
-# First time — creates samconfig.toml
-sam build && sam deploy --guided
+Deployments are automated via GitHub Actions — push to `main` and the pipeline runs tests, deploys the Lambda, syncs the frontend to S3, and invalidates CloudFront. No AWS keys are stored; the workflow uses OIDC (short-lived tokens scoped to this repo).
 
-# Subsequent deploys
-sam build && sam deploy
+See [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml) for the full pipeline and [`DEPLOYMENT.md`](./DEPLOYMENT.md) for manual deploy steps, first-time setup, and SSM secrets.
 
-# Sync frontend to S3 after JS/CSS changes
-aws s3 sync src/wwwroot/ s3://<bucket> --delete
-aws cloudfront create-invalidation --distribution-id <id> --paths "/*"
-```
+### GitHub Actions secrets required
 
-Secrets (`DATABASE_URL`, `JWT_KEY`) are stored in SSM Parameter Store as SecureString under `/brewvio`. See [`DEPLOYMENT.md`](./DEPLOYMENT.md) for full setup.
+| Secret | Value |
+|---|---|
+| `AWS_DEPLOY_ROLE_ARN` | IAM role ARN from `infra/github-oidc-role.yaml` stack |
+| `FRONTEND_BUCKET` | S3 bucket name (CloudFormation output `FrontendBucketName`) |
+| `CLOUDFRONT_DISTRIBUTION_ID` | CloudFront distribution ID (CloudFormation output) |
+
+---
+
+## Cost estimate
+
+Running at ~100 orders/day with 1–2 users on AWS (ap-southeast-2). Almost entirely within the AWS free tier.
+
+| Service | Monthly cost |
+|---|---|
+| AWS Lambda (arm64, 1769 MB, ~21K invocations) | $0.00 |
+| Amazon API Gateway (HTTP API, ~21K requests) | $0.00 *(free tier 12 mo, ~$0.02 after)* |
+| Amazon S3 (0.5 GB static frontend) | $0.00 |
+| Amazon CloudFront (~21K requests, ~0.3 GB out) | $0.00 |
+| Amazon CloudWatch (logs, 1-day retention) | $0.00 |
+| **Total** | **~$0.00 – $0.02/month** |
+
+Full estimate: [calculator.aws](https://calculator.aws/#/estimate?id=b59a73ed8447219c361238a7d826057c5e454171)
 
 ---
 
@@ -120,9 +135,11 @@ src/
 └── wwwroot/         Static frontend (uploaded to S3)
 
 tests/               xUnit integration tests (real Postgres, per-test transaction rollback)
+infra/               AWS CloudFormation templates (GitHub OIDC role)
 docs/DOCS.md         Full developer reference — API docs, models, services, deployment
 template.yaml        AWS SAM infrastructure definition
 DEPLOYMENT.md        Step-by-step deployment and ops guide
+.github/workflows/   CI/CD pipeline (test → deploy on push to main)
 ```
 
 ---

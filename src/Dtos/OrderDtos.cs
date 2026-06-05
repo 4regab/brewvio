@@ -18,7 +18,7 @@ public record ReceiptDto(int TransactionId, DateTime Timestamp, string Cashier, 
     IReadOnlyList<string> StockWarnings);
 
 // ----- Draft order -----
-public record SaveDraftRequest(IReadOnlyList<CartItemInput> Items, decimal DiscountAmount, string PaymentMethod);
+public record SaveDraftRequest(IReadOnlyList<CartItemInput> Items, [property: JsonRequired] decimal DiscountAmount, string PaymentMethod);
 public record ConfirmDraftRequest(IReadOnlyList<PaymentInput> Payments);
 public record DraftDto(int Id, DateTime Timestamp, string Cashier, string PaymentMethod,
     decimal Subtotal, decimal DiscountAmount, int ItemCount, string ItemSummary,
