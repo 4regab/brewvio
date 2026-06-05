@@ -26,10 +26,15 @@ public class OrderService(BrewvioDbContext db, CurrentUser current, AuditService
         var subtotal = BuildLineItems(req.Items, menuItems, mods, lineItems, usage);
 
         subtotal = Math.Round(subtotal, 2);
-        var discount = Math.Clamp(Math.Round(req.DiscountAmount, 2), 0, subtotal);
+        // Polymorphic discount: today the wire contract carries a peso amount, so we resolve a
+        // FixedAmountDiscount. The subclass's Apply() does the same clamp+round we used to do
+        // inline, so totals are byte-identical with the previous implementation. Swapping in
+        // a PercentDiscount (or a future BOGO/StackedDiscount) requires no change here.
+        Discount discount = new FixedAmountDiscount(req.DiscountAmount);
+        var discountAmount = discount.Apply(subtotal);
         var taxRate = await settings.GetTaxRateAsync();
-        var tax = Math.Round((subtotal - discount) * taxRate / 100m, 2);
-        var total = subtotal - discount + tax;
+        var tax = Math.Round((subtotal - discountAmount) * taxRate / 100m, 2);
+        var total = subtotal - discountAmount + tax;
 
         // Payment: a single tender (Cash or GCash). GCash settles like cash for change/accounting.
         var payments = req.Payments ?? new List<PaymentInput>();
@@ -53,7 +58,7 @@ public class OrderService(BrewvioDbContext db, CurrentUser current, AuditService
         var shiftId = (await db.Shifts.FirstOrDefaultAsync(s => s.CashierId == current.Id && s.Status == "Open"))?.Id;
         var tx = new Transaction
         {
-            Timestamp = DateTime.UtcNow, Subtotal = subtotal, DiscountAmount = discount,
+            Timestamp = DateTime.UtcNow, Subtotal = subtotal, DiscountAmount = discountAmount,
             TaxAmount = tax, TotalAmount = total, PaymentMethod = method,
             CashierId = current.Id, ShiftId = shiftId, Status = "Completed",
             Items = lineItems, Payments = payRows

@@ -48,20 +48,21 @@ public class OrderServiceTests(SharedTestDb fixture) : IClassFixture<SharedTestD
     }
 
     [Fact]
-    public async Task CreateOrder_supports_split_payment()
+    public async Task CreateOrder_supports_gcash_payment()
     {
         using var t = fixture.Begin();
         await DatabaseInitializer.SeedAllOriginalAsync(t.Db);
         var (svc, db) = Build(t);
         var latte = db.MenuItems.First(m => m.Name == "Caffe Latte");
 
+        // Single-tender model: orders are paid with either Cash or GCash (no split tenders).
         var receipt = await svc.CreateAsync(new CreateOrderRequest(Cart(latte.Id, 1), 0m,
-            new List<PaymentInput> { new("Cash", 100m), new("Card", 56.80m) }));
+            new List<PaymentInput> { new("GCash", 156.80m) }));
 
-        Assert.Equal("Split", receipt.PaymentMethod);
+        Assert.Equal("GCash", receipt.PaymentMethod);
         Assert.Equal(156.80m, receipt.TotalAmount);
         Assert.Equal(0m, receipt.Change);
-        Assert.Equal(2, receipt.Payments.Count);
+        Assert.Single(receipt.Payments);
     }
 
     [Fact]
