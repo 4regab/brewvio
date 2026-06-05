@@ -55,6 +55,15 @@ public static class ExportHelper
         return Utf8(sb.ToString());
     }
 
+    public static byte[] OrdersCsv(IEnumerable<TransactionSummaryDto> orders)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine("Order #,Timestamp,Cashier,Items,Status,Payment,Total");
+        foreach (var o in orders)
+            sb.AppendLine($"{o.Id},{o.Timestamp:yyyy-MM-dd HH:mm:ss},{F(o.Cashier)},{o.ItemCount},{F(o.Status)},{F(o.PaymentMethod)},{o.TotalAmount}");
+        return Utf8(sb.ToString());
+    }
+
     // ---------- PDF ----------
     public static byte[] SalesReportPdf(ReportDto r, string storeName, string currency, DateTime fromUtc, DateTime toUtc) =>
         Document.Create(doc => doc.Page(page =>

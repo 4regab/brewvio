@@ -23,6 +23,15 @@ window.Views = window.Views || {};
     render: async (root) => {
       root.innerHTML = '';
       let activeTab = 'sales';
+      let currentQs = `?from=${isoDaysAgo(PERIODS.daily.days)}&to=${isoDaysAgo(0)}&period=daily`;
+
+      const downloadBtn = el('div', { class: 'btn-group' },
+        button('<i class="bi bi-filetype-csv"></i> CSV', 'btn-outline-secondary',
+          () => Api.download('/api/reports/export/csv' + currentQs, 'sales.csv').catch((e) => toast(e.message, 'danger'))),
+        button('<i class="bi bi-filetype-pdf"></i> PDF', 'btn-primary',
+          () => Api.download('/api/reports/export/pdf' + currentQs, 'sales.pdf').catch((e) => toast(e.message, 'danger'))));
+
+      root.appendChild(UI.viewToolbar('Report', downloadBtn));
 
       const tabSales = el('button', { class: 'activity-tab active', text: 'Sales Report', onClick: () => switchTab('sales') });
       const tabPerf = el('button', { class: 'activity-tab', text: 'Menu Performance', onClick: () => switchTab('performance') });
@@ -30,6 +39,8 @@ window.Views = window.Views || {};
       const content = el('div', { class: 'mt-3' });
       root.appendChild(tabs);
       root.appendChild(content);
+
+      function setQs(qs) { currentQs = qs; }
 
       function switchTab(tab) {
         activeTab = tab;
@@ -49,6 +60,7 @@ window.Views = window.Views || {};
         const qs = () => `?from=${fromIn.value}&to=${toIn.value}&period=${period}`;
 
         const load = async () => {
+          setQs(qs());
           results.innerHTML = ''; results.appendChild(spinner('Crunching numbers...'));
           try {
             const r = await Api.get('/api/reports' + qs());
@@ -106,10 +118,7 @@ window.Views = window.Views || {};
           el('div', { class: 'd-flex gap-2 align-items-end flex-wrap' },
             el('div', {}, el('label', { class: 'form-label small mb-1', text: 'From' }), fromIn),
             el('div', {}, el('label', { class: 'form-label small mb-1', text: 'To' }), toIn),
-            button('<i class="bi bi-arrow-repeat"></i> Generate', 'btn-primary', load)),
-          el('div', { class: 'd-flex gap-2 ms-auto' },
-            button('<i class="bi bi-filetype-csv"></i> CSV', 'btn-outline-secondary btn-sm', () => Api.download('/api/reports/export/csv' + qs(), 'sales.csv').catch((e) => toast(e.message, 'danger'))),
-            button('<i class="bi bi-filetype-pdf"></i> PDF', 'btn-outline-secondary btn-sm', () => Api.download('/api/reports/export/pdf' + qs(), 'sales.pdf').catch((e) => toast(e.message, 'danger')))));
+            button('<i class="bi bi-arrow-repeat"></i> Generate', 'btn-primary', load)));
 
         content.appendChild(el('div', { class: 'section-card p-3' }, head));
         content.appendChild(results);
@@ -134,6 +143,7 @@ window.Views = window.Views || {};
         };
 
         const load = async () => {
+          setQs(qs());
           results.innerHTML = ''; results.appendChild(spinner('Analyzing menu...'));
           try {
             const r = await Api.get('/api/reports' + qs());

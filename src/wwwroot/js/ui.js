@@ -128,5 +128,16 @@ const UI = (() => {
     });
   }
 
-  return { $, $$, el, esc, setCurrency, money, qty, dateTime, dateOnly, button, toast, modal, closeModal, promptReason, spinner, empty, statCard, lineChart, barChart, doughnutChart };
+  // Page-level toolbar: title on the left, actions on the right.
+  // viewToolbar('Title', actionEl, actionEl, ...) or viewToolbar({ title, subtitle }, ...actions).
+  function viewToolbar(arg, ...actions) {
+    const opts = typeof arg === 'string' ? { title: arg } : (arg || {});
+    const left = el('div', { class: 'view-toolbar-left' },
+      el('h3', { class: 'view-toolbar-title', text: opts.title || '' }),
+      opts.subtitle ? el('div', { class: 'view-toolbar-sub', text: opts.subtitle }) : null);
+    const right = el('div', { class: 'view-toolbar-actions' }, ...actions);
+    return el('div', { class: 'view-toolbar' }, left, right);
+  }
+
+  return { $, $$, el, esc, setCurrency, money, qty, dateTime, dateOnly, button, toast, modal, closeModal, promptReason, spinner, empty, statCard, lineChart, barChart, doughnutChart, viewToolbar };
 })();

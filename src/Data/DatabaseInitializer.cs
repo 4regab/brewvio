@@ -68,8 +68,7 @@ public static class DatabaseInitializer
         // ----- Users -----
         db.Users.AddRange(
             new User { Username = "manager", FullName = "Store Manager", Role = Roles.Manager, Status = UserStatus.Active, IsActive = true, PasswordHash = PasswordHasher.Hash("Manager@123") },
-            new User { Username = "cashier", FullName = "Front Cashier", Role = Roles.Cashier, Status = UserStatus.Active, IsActive = true, PasswordHash = PasswordHasher.Hash("Cashier@123") },
-            new User { Username = "newcashier", FullName = "Jamie Pending", Role = Roles.Cashier, Status = UserStatus.Pending, IsActive = false, PasswordHash = PasswordHasher.Hash("Pending@123") });
+            new User { Username = "cashier", FullName = "Front Cashier", Role = Roles.Cashier, Status = UserStatus.Active, IsActive = true, PasswordHash = PasswordHasher.Hash("Cashier@123") });
 
         // ----- Ingredients (kept minimal — no recipes needed for food items) -----
         var rice = new Ingredient { Code = "FOOD-01", Name = "Rice", Category = "Food", Unit = "serving", StockLevel = 500, Threshold = 50, CostPerUnit = 8m };

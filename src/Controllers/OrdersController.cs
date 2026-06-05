@@ -1,4 +1,5 @@
 using Brewvio.Dtos;
+using Brewvio.Helpers;
 using Brewvio.Services;
 using Microsoft.AspNetCore.Mvc;
 
@@ -14,6 +15,10 @@ public class OrdersController(OrderService orders) : ControllerBase
 
     [HttpGet("recent")]
     public async Task<IActionResult> Recent([FromQuery] int take = 50) => Ok(await orders.RecentAsync(take));
+
+    [HttpGet("export")]
+    public async Task<IActionResult> Export([FromQuery] int take = 200) =>
+        File(ExportHelper.OrdersCsv(await orders.RecentAsync(take)), "text/csv", $"orders_{DateTime.UtcNow:yyyyMMdd-HHmm}.csv");
 
     [HttpGet("{id:int}")]
     public async Task<IActionResult> Get(int id) => await orders.GetReceiptAsync(id) is { } r ? Ok(r) : NotFound();

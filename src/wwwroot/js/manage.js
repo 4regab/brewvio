@@ -50,13 +50,17 @@ window.Views = window.Views || {};
       root.appendChild(spinner());
       let items; try { items = await Api.get('/api/inventory'); } catch (e) { root.innerHTML = ''; root.appendChild(empty('bi-exclamation-triangle', e.message)); return; }
       root.innerHTML = '';
+      const isManager = App.state.user && App.state.user.role === 'Manager';
       const low = items.filter((i) => i.lowStock);
       const search = el('input', { class: 'form-control', placeholder: 'Search code, name or category…', style: 'max-width:280px' });
 
-      root.appendChild(toolbar('Inventory',
-        search,
-        button('<i class="bi bi-download"></i> Export CSV', 'btn-outline-secondary', () => Api.download('/api/inventory/export', 'inventory.csv').catch((e) => toast(e.message, 'danger'))),
-        button('<i class="bi bi-plus-lg"></i> Add item', 'btn-primary', () => ingredientForm())));
+      const toolbarActions = [];
+      if (isManager) {
+        toolbarActions.push(
+          button('<i class="bi bi-download"></i> Export CSV', 'btn-outline-secondary', () => Api.download('/api/inventory/export', 'inventory.csv').catch((e) => toast(e.message, 'danger'))),
+          button('<i class="bi bi-plus-lg"></i> Add item', 'btn-primary', () => ingredientForm()));
+      }
+      root.appendChild(UI.viewToolbar('Inventory', ...toolbarActions));
 
       // KPI strip: total items / low / out of stock.
       const outCount = items.filter((i) => i.status === 'Out of Stock').length;
@@ -67,6 +71,10 @@ window.Views = window.Views || {};
 
       if (low.length) root.appendChild(el('div', { class: 'alert alert-warning d-flex align-items-center gap-2' },
         el('i', { class: 'bi bi-exclamation-triangle-fill' }), `${low.length} item(s) at or below threshold: ${low.map((i) => i.name).join(', ')}`));
+
+      // Search row above the table
+      search.style.maxWidth = '360px';
+      root.appendChild(el('div', { class: 'd-flex align-items-center mb-3' }, search));
 
       const tbody = el('tbody');
       const statusBadge = (s) => s === 'Out of Stock' ? '<span class="badge badge-soft-danger">Out of Stock</span>'
@@ -83,9 +91,11 @@ window.Views = window.Views || {};
           el('td', { class: 'text-end', text: qty(i.threshold) }),
           el('td', { class: 'text-end', text: money(i.costPerUnit) }),
           el('td', { html: statusBadge(i.status) }),
-          el('td', { class: 'text-end' }, el('div', { class: 'd-flex gap-2 justify-content-end' },
-            button('Adjust', 'btn-sm btn-light', () => adjustForm(i)),
-            button('Edit', 'btn-sm btn-outline-secondary', () => ingredientForm(i)))))));
+          el('td', { class: 'text-end' }, isManager
+            ? el('div', { class: 'd-flex gap-2 justify-content-end' },
+                button('Adjust', 'btn-sm btn-light', () => adjustForm(i)),
+                button('Edit', 'btn-sm btn-outline-secondary', () => ingredientForm(i)))
+            : el('span', { class: 'text-muted small', text: '—' })))));
       };
       renderRows(items);
       search.addEventListener('input', () => {

@@ -31,20 +31,20 @@ public class OrderService(BrewvioDbContext db, CurrentUser current, AuditService
         var tax = Math.Round((subtotal - discount) * taxRate / 100m, 2);
         var total = subtotal - discount + tax;
 
-        // Payment (supports split): card is applied exactly; cash absorbs any change.
+        // Payment: a single tender (Cash or GCash). GCash settles like cash for change/accounting.
         var payments = req.Payments ?? new List<PaymentInput>();
-        var cardTotal = payments.Where(p => p.Method == "Card").Sum(p => p.Amount);
         var cashTendered = payments.Where(p => p.Method == "Cash").Sum(p => p.Amount);
-        if (cardTotal > total) throw new ArgumentException("Card amount exceeds the order total.");
-        if (cashTendered + cardTotal + 0.005m < total) throw new ArgumentException("Insufficient payment.");
-        var cashApplied = total - cardTotal;
-        var change = Math.Round(cashTendered - cashApplied, 2);
-        var tendered = Math.Round(cashTendered + cardTotal, 2);
+        var gcashTendered = payments.Where(p => p.Method == "GCash").Sum(p => p.Amount);
+        var totalTendered = cashTendered + gcashTendered;
+        if (totalTendered + 0.005m < total) throw new ArgumentException("Insufficient payment.");
+        var change = Math.Round(totalTendered - total, 2);
+        var tendered = Math.Round(totalTendered, 2);
 
         var payRows = new List<Payment>();
-        if (cardTotal > 0) payRows.Add(new Payment { Method = "Card", Amount = cardTotal });
+        if (gcashTendered > 0) payRows.Add(new Payment { Method = "GCash", Amount = Math.Min(gcashTendered, total) });
+        var cashApplied = Math.Max(0, total - Math.Min(gcashTendered, total));
         if (cashApplied > 0 || payRows.Count == 0) payRows.Add(new Payment { Method = "Cash", Amount = cashApplied });
-        var method = PaymentMethodLabel(cardTotal, cashApplied);
+        var method = gcashTendered > 0 ? "GCash" : "Cash";
 
         // Deduct recipe ingredients and collect low/negative-stock warnings.
         // The actual deduction + persistence happens in PersistWithStockAsync, which re-applies the
@@ -185,13 +185,6 @@ public class OrderService(BrewvioDbContext db, CurrentUser current, AuditService
                 usage[ri.IngredientId] = usage.GetValueOrDefault(ri.IngredientId) + ri.Quantity * ci.Quantity;
         }
         return subtotal;
-    }
-
-    // "Split" when both tenders are present, otherwise the single method used.
-    private static string PaymentMethodLabel(decimal cardTotal, decimal cashApplied)
-    {
-        if (cardTotal > 0 && cashApplied > 0) return "Split";
-        return cardTotal > 0 ? "Card" : "Cash";
     }
 
     // Prefers full name, falls back to username, empty when no cashier is attached.

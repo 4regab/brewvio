@@ -227,44 +227,43 @@ window.Views = window.Views || {};
     const t = totals();
     let method = 'Cash';
     const cashIn = el('input', { type: 'number', min: '0', step: '0.01', class: 'form-control form-control-lg', value: t.total.toFixed(2) });
-    const cardIn = el('input', { type: 'number', min: '0', step: '0.01', class: 'form-control form-control-lg', value: '0.00' });
     const changeRow = el('div', { class: 'd-flex justify-content-between fs-5 mt-3' },
       el('span', { text: 'Change' }), el('span', { class: 'fw-bold change-val', text: money(0) }));
-    const cashWrap = el('div', { class: 'mb-2' }, el('label', { class: 'form-label', text: 'Cash tendered' }), cashIn);
-    const cardWrap = el('div', { class: 'mb-2 d-none' }, el('label', { class: 'form-label', text: 'Card amount' }), cardIn);
+    const cashLabel = el('label', { class: 'form-label', text: 'Cash tendered' });
+    const cashWrap = el('div', { class: 'mb-2' }, cashLabel, cashIn);
 
     function recalc() {
-      const cash = Number(cashIn.value) || 0, card = Number(cardIn.value) || 0;
-      const paid = (method === 'Card' ? 0 : cash) + (method === 'Cash' ? 0 : card);
-      changeRow.querySelector('.change-val').textContent = money(Math.max(0, paid - t.total));
+      const cash = Number(cashIn.value) || 0;
+      changeRow.querySelector('.change-val').textContent = money(Math.max(0, cash - t.total));
     }
-    cashIn.addEventListener('input', recalc); cardIn.addEventListener('input', recalc);
+    cashIn.addEventListener('input', recalc);
 
     const seg = el('div', { class: 'btn-group w-100 mb-3' });
-    ['Cash', 'Card', 'Split'].forEach((m, i) => seg.appendChild(el('button', {
-      class: 'btn ' + (i === 0 ? 'btn-primary' : 'btn-outline-secondary'), text: m, onClick: () => {
-        method = m;
-        Array.from(seg.children).forEach((b) => b.className = 'btn ' + (b.textContent === m ? 'btn-primary' : 'btn-outline-secondary'));
-        cashWrap.classList.toggle('d-none', m === 'Card');
-        cardWrap.classList.toggle('d-none', m === 'Cash');
-        if (m === 'Card') cardIn.value = t.total.toFixed(2);
-        if (m === 'Cash') cashIn.value = t.total.toFixed(2);
-        if (m === 'Split') { cashIn.value = '0.00'; cardIn.value = '0.00'; }
-        recalc();
-      }
+    const setMethod = (m) => {
+      method = m;
+      Array.from(seg.children).forEach((b) => b.className = 'btn ' + (b.dataset.method === m ? 'btn-primary' : 'btn-outline-secondary'));
+      cashLabel.textContent = m === 'GCash' ? 'GCash amount' : 'Cash tendered';
+      cashIn.value = t.total.toFixed(2);
+      recalc();
+    };
+    [
+      { key: 'Cash', label: '<i class="bi bi-cash-coin"></i> Cash' },
+      { key: 'GCash', label: '<i class="bi bi-phone"></i> GCash' },
+    ].forEach((m, i) => seg.appendChild(el('button', {
+      class: 'btn ' + (i === 0 ? 'btn-primary' : 'btn-outline-secondary'),
+      html: m.label, dataset: { method: m.key },
+      onClick: () => setMethod(m.key),
     })));
 
     const confirm = button('Confirm payment', 'btn-primary btn-lg w-100', async () => {
-      const cash = Number(cashIn.value) || 0, card = Number(cardIn.value) || 0;
-      const payments = [];
-      if (method !== 'Card' && cash > 0) payments.push({ method: 'Cash', amount: cash });
-      if (method !== 'Cash' && card > 0) payments.push({ method: 'Card', amount: card });
-      if (!payments.length) { toast('Enter a payment amount.', 'warning'); return; }
+      const tendered = Number(cashIn.value) || 0;
+      if (tendered + 0.005 < t.total) { toast('Insufficient payment.', 'warning'); return; }
       confirm.disabled = true;
       try {
         const receipt = await Api.post('/api/orders', {
           items: cart.map((l) => ({ menuItemId: l.menuItemId, quantity: l.quantity, modifierIds: l.modifiers.map((m) => m.id), notes: null })),
-          discountAmount: discount || 0, payments
+          discountAmount: discount || 0,
+          payments: [{ method, amount: tendered }],
         });
         cart = []; discount = 0; renderCart();
         (receipt.stockWarnings || []).forEach((w) => toast(w, 'warning'));
@@ -272,7 +271,7 @@ window.Views = window.Views || {};
       } catch (e) { toast(e.message, 'danger'); confirm.disabled = false; }
     });
 
-    modal({ title: 'Payment - ' + money(t.total), body: el('div', {}, seg, cashWrap, cardWrap, changeRow), footer: [button('Cancel', 'btn-light', closeModal), confirm] });
+    modal({ title: 'Payment - ' + money(t.total), body: el('div', {}, seg, cashWrap, changeRow), footer: [button('Cancel', 'btn-light', closeModal), confirm] });
     recalc();
   }
 
@@ -324,17 +323,19 @@ window.Views = window.Views || {};
       catch (e) { root.innerHTML = ''; root.appendChild(empty('bi-exclamation-triangle', e.message)); return; }
       root.innerHTML = '';
 
-      menuTabsEl = el('div', { class: 'cat-tabs' });
+      menuTabsEl = el('div', { class: 'cat-rail' });
       menuGrid = el('div', { class: 'menu-grid' });
 
       const searchInput = el('input', {
-        type: 'text', placeholder: 'Search something sweet on your mind...',
+        type: 'text', placeholder: 'Search Product...',
         onInput: (e) => { searchQuery = e.target.value.trim(); renderMenu(); }
       });
       const left = el('div', { class: 'pos-left' },
-        menuTabsEl,
-        el('div', { class: 'pos-search' }, searchInput, el('i', { class: 'bi bi-search search-icon' })),
-        menuGrid);
+        el('div', { class: 'pos-menu-row' },
+          menuTabsEl,
+          el('div', { class: 'pos-menu-col' },
+            el('div', { class: 'pos-search' }, el('i', { class: 'bi bi-search search-icon-left' }), searchInput),
+            el('div', { class: 'menu-grid-wrap' }, menuGrid))));
 
       cartItemsEl = el('div', { class: 'cart-items' });
       totalsEl = el('div', { class: 'cart-totals' });
@@ -349,10 +350,12 @@ window.Views = window.Views || {};
 
       const cartPanel = el('div', { class: 'cart-panel' },
         el('div', { class: 'cart-header' },
-          el('div', { class: 'cart-header-icon' }, el('i', { class: 'bi bi-receipt' })),
-          el('div', { class: 'order-number', text: 'Current Order' }),
-          el('button', { class: 'cart-header-edit', onClick: () => { cart = []; discount = 0; renderCart(); } },
-            el('i', { class: 'bi bi-pencil' }))),
+          el('div', { class: 'cart-header-title' },
+            el('div', { class: 'cart-header-eyebrow', text: 'Order Details' }),
+            el('div', { class: 'cart-header-name', text: 'Takeout' })),
+          el('button', { class: 'cart-header-edit', title: 'Clear cart',
+            onClick: () => { cart = []; discount = 0; renderCart(); } },
+            el('i', { class: 'bi bi-arrow-counterclockwise' }))),
         cartItemsEl, totalsEl,
         el('div', { class: 'cart-actions' }, chargeBtn, cancelBtn));
 
@@ -366,14 +369,21 @@ window.Views = window.Views || {};
   Views.activity = {
     render: async (root) => {
       root.innerHTML = '';
+      let activeTab = 'queue';
       const tabQueue = el('button', { class: 'activity-tab active', text: 'Order Queue', onClick: () => switchTab('queue') });
       const tabHistory = el('button', { class: 'activity-tab', text: 'Order History', onClick: () => switchTab('history') });
       const tabs = el('div', { class: 'activity-tabs' }, tabQueue, tabHistory);
-      const content = el('div');
+
+      const downloadBtn = button('<i class="bi bi-download"></i> Download', 'btn-primary',
+        () => Api.download('/api/orders/export?take=200', 'orders.csv').catch((e) => toast(e.message, 'danger')));
+
+      root.appendChild(UI.viewToolbar('Activity', downloadBtn));
       root.appendChild(tabs);
+      const content = el('div');
       root.appendChild(content);
 
       function switchTab(tab) {
+        activeTab = tab;
         tabQueue.classList.toggle('active', tab === 'queue');
         tabHistory.classList.toggle('active', tab === 'history');
         if (tab === 'queue') renderQueue(); else renderHistory();

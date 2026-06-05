@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <link href="css/app.css?v=20260604j" rel="stylesheet" />
+  <link href="css/app.css?v=20260605k" rel="stylesheet" />
 </head>
 <body>
 
@@ -27,17 +27,21 @@
     <!-- Sidebar drawer (hidden by default, opens on hamburger click) -->
     <div class="sidebar-scrim" id="sidebar-scrim"></div>
     <aside class="sidebar" id="sidebar">
-      <div class="sidebar-brand">
-        <span class="brand-mark sm">&#9749;</span>
-        <span class="brand-name">Chao &amp; Brew</span>
-        <button class="sidebar-close" id="sidebar-close" aria-label="Close menu">
-          <i class="bi bi-x-lg"></i>
-        </button>
+      <div class="sidebar-head">
+        <div class="sidebar-user" id="sidebar-user">
+          <div class="avatar" id="sidebar-avatar">U</div>
+          <div class="sidebar-user-info">
+            <div class="sidebar-user-name" id="sidebar-user-name">User</div>
+            <div class="sidebar-user-role" id="sidebar-user-role">Role</div>
+          </div>
+        </div>
       </div>
       <nav id="nav-menu" class="nav flex-column"></nav>
       <div class="sidebar-footer">
-        <div class="store-name" id="sidebar-store">Chao &amp; Brew</div>
-        <div class="sidebar-version">v1.0 - POS System</div>
+        <button class="sidebar-logout" id="sidebar-logout">
+          <span class="sidebar-logout-label">Log Out</span>
+          <span class="sidebar-logout-icon"><i class="bi bi-box-arrow-right"></i></span>
+        </button>
       </div>
     </aside>
 
@@ -46,21 +50,11 @@
         <button id="nav-toggle" aria-label="Open menu">
           <i class="bi bi-list fs-5"></i>
         </button>
-        <h2 id="view-title">Order</h2>
         <div class="topbar-right">
           <div class="topbar-date d-none d-sm-flex">
             <i class="bi bi-calendar3"></i>
             <span id="topbar-date-text"></span>
           </div>
-          <div class="text-end d-none d-sm-block">
-            <div id="user-name"></div>
-            <div id="user-role"></div>
-          </div>
-          <div class="avatar" id="user-avatar">U</div>
-          <button id="logout-btn" class="btn btn-sm">
-            <i class="bi bi-box-arrow-right"></i>
-            <span class="d-none d-md-inline ms-1">Sign out</span>
-          </button>
         </div>
       </header>
       <main id="app" class="view-container"></main>
@@ -89,13 +83,13 @@
 
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
-  <script src="js/api.js?v=20260604i"></script>
-  <script src="js/ui.js?v=20260604i"></script>
-  <script src="js/auth.js?v=20260604i"></script>
-  <script src="js/pos.js?v=20260604i"></script>
-  <script src="js/shift.js?v=20260604i"></script>
-  <script src="js/reports.js?v=20260604i"></script>
-  <script src="js/manage.js?v=20260604i"></script>
-  <script src="js/app.js?v=20260604i"></script>
+  <script src="js/api.js?v=20260605k"></script>
+  <script src="js/ui.js?v=20260605k"></script>
+  <script src="js/auth.js?v=20260605k"></script>
+  <script src="js/pos.js?v=20260605k"></script>
+  <script src="js/shift.js?v=20260605k"></script>
+  <script src="js/reports.js?v=20260605k"></script>
+  <script src="js/manage.js?v=20260605k"></script>
+  <script src="js/app.js?v=20260605k"></script>
 </body>
 </html>

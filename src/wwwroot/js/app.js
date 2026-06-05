@@ -6,7 +6,7 @@ const App = (() => {
     { id: 'pos', label: 'Point of Sales', icon: 'bi-cup-hot-fill', roles: ['Manager', 'Cashier'] },
     { id: 'activity', label: 'Activity', icon: 'bi-receipt-cutoff', roles: ['Manager', 'Cashier'] },
     { id: 'reports', label: 'Report', icon: 'bi-graph-up-arrow', roles: ['Manager'] },
-    { id: 'inventory', label: 'Inventory', icon: 'bi-box-seam', roles: ['Manager'] },
+    { id: 'inventory', label: 'Inventory', icon: 'bi-box-seam', roles: ['Manager', 'Cashier'] },
     { id: 'menu', label: 'Menu Edit', icon: 'bi-card-list', roles: ['Manager'] },
     { id: 'users', label: 'Users', icon: 'bi-people', roles: ['Manager'] },
     { id: 'settings', label: 'Settings', icon: 'bi-gear', roles: ['Manager'] },
@@ -26,10 +26,9 @@ const App = (() => {
   }
 
   async function init() {
-    $('#logout-btn').addEventListener('click', logout);
+    $('#sidebar-logout').addEventListener('click', logout);
     $('#nav-toggle').addEventListener('click', () => $('#app-shell').classList.add('nav-open'));
     $('#sidebar-scrim').addEventListener('click', closeSidebar);
-    $('#sidebar-close').addEventListener('click', closeSidebar);
     window.addEventListener('hashchange', route);
     window.addEventListener('brewvio:unauthorized', () => { if (state.user) { state.user = null; Auth.start(); UI.toast('Your session expired. Please sign in.', 'warning'); } });
 
@@ -56,10 +55,9 @@ const App = (() => {
     $('#auth-screen').classList.add('d-none');
     $('#app-shell').classList.remove('d-none');
     const name = state.user.fullName || state.user.username;
-    $('#user-name').textContent = name;
-    $('#user-role').textContent = state.user.role;
-    $('#user-avatar').textContent = name.slice(0, 1).toUpperCase();
-    $('#sidebar-store').textContent = (App.store && App.store.storeName) || 'Chao & Brew';
+    $('#sidebar-user-name').textContent = name;
+    $('#sidebar-user-role').textContent = state.user.role;
+    $('#sidebar-avatar').textContent = name.slice(0, 1).toUpperCase();
     buildNav();
     const target = allowed(currentRoute()) ? (location.hash || '#pos') : '#pos';
     if (location.hash === target) route(); else location.hash = target;
@@ -76,8 +74,6 @@ const App = (() => {
     const id = currentRoute();
     if (!allowed(id)) { location.hash = '#pos'; return; }
     $$('#nav-menu .nav-link').forEach((a) => a.classList.toggle('active', a.getAttribute('href') === '#' + id));
-    const navItem = NAV.find((n) => n.id === id);
-    $('#view-title').textContent = navItem ? navItem.label : 'Chao & Brew';
     closeSidebar();
     const root = $('#app'); root.innerHTML = '';
     const view = window.Views[id];
