@@ -1342,6 +1342,18 @@ tr.low-stock { background: #fef3c7 !important; }
 .rpt-orders-filters .form-control { width: auto; max-width: 140px; font-size: .78rem; }
 .rpt-filter-sep { color: var(--brew-muted); font-size: .82rem; }
 
+/* Order status pills in the All Orders table */
+.rpt-status {
+  display: inline-block; padding: .2rem .6rem; border-radius: 999px;
+  font-family: 'Inter', sans-serif; font-weight: 600; font-size: .72rem;
+  line-height: 1; white-space: nowrap;
+  background: var(--brew-espresso-l); color: var(--brew-muted);
+}
+.rpt-status-completed { background: #dcfce7; color: #166534; }
+.rpt-status-preparing { background: #fef3c7; color: #92400e; }
+.rpt-status-refunded  { background: #fee2e2; color: #991b1b; }
+.rpt-status-draft     { background: #e0e7ff; color: #3730a3; }
+
 /* Legacy â€” keep old seg-control for any reuse */
 .seg-control {
   display: inline-flex; background: var(--brew-surface);

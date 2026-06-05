@@ -271,9 +271,9 @@ public class OrderService(BrewvioDbContext db, CurrentUser current, AuditService
     public async Task<int> NextOrderNumberAsync() =>
         (await db.Transactions.MaxAsync(t => (int?)t.Id) ?? 0) + 1;
 
-    public async Task<List<TransactionSummaryDto>> RecentAsync(int take = 50, DateTime? from = null) =>
+    public async Task<List<TransactionSummaryDto>> RecentAsync(int take = 50, DateTime? from = null, DateTime? to = null) =>
         await db.Transactions.AsNoTracking()
-            .Where(t => from == null || t.Timestamp >= from)
+            .Where(t => (from == null || t.Timestamp >= from) && (to == null || t.Timestamp < to))
             .OrderByDescending(t => t.Timestamp)
             .Take(take)
             .Select(t => new TransactionSummaryDto(t.Id, t.Timestamp, t.TotalAmount, t.PaymentMethod, t.Status,

@@ -107,7 +107,7 @@ const App = (() => {
       if ((id === 'reports' || id === 'performance') && !window._reportsLoaded) {
         await new Promise((resolve, reject) => {
           const s = document.createElement('script');
-          s.src = 'js/reports.js?v=20260606j';
+          s.src = 'js/reports.js?v=20260606k';
           s.onload = resolve; s.onerror = reject;
           document.head.appendChild(s);
         });
@@ -116,7 +116,7 @@ const App = (() => {
       if (['inventory', 'menu', 'users', 'settings'].includes(id) && !window._manageLoaded) {
         await new Promise((resolve, reject) => {
           const s = document.createElement('script');
-          s.src = 'js/manage.js?v=20260606j';
+          s.src = 'js/manage.js?v=20260606k';
           s.onload = resolve; s.onerror = reject;
           document.head.appendChild(s);
         });

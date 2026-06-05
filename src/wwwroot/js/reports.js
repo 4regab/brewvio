@@ -170,8 +170,8 @@ window.Views = window.Views || {};
               : lineChart(trendCanvas, r.trend.map((t) => t.label), r.trend.map((t) => t.sales), 'Sales');
           }
 
-          // All Orders table
-          buildOrdersTable(r, ordersSection);
+          // All Orders table — real transactions with actual order numbers
+          await buildOrdersTable(ordersSection);
 
         } catch (e) {
           kpiGrid.innerHTML = '';
@@ -202,7 +202,7 @@ window.Views = window.Views || {};
             unit ? el('span', { class: 'rpt-sum-unit', text: unit }) : null));
       }
 
-      function buildOrdersTable(r, container) {
+      async function buildOrdersTable(container) {
         container.innerHTML = '';
         const head = el('div', { class: 'rpt-orders-head' },
           el('div', { class: 'rpt-orders-title' },
@@ -214,23 +214,43 @@ window.Views = window.Views || {};
             button('<i class="bi bi-search"></i>', 'btn-sm btn-outline-secondary', load)));
 
         const tbody = el('tbody');
-        r.menuPerformance.forEach((m, idx) => {
-          tbody.appendChild(el('tr', {},
-            el('td', { text: String(idx + 1).padStart(3, '0') }),
-            el('td', { text: m.name }),
-            el('td', { text: m.category }),
-            el('td', { class: 'text-end', text: String(m.quantitySold) }),
-            el('td', { class: 'text-end fw-semibold', text: money(m.revenue) })));
-        });
-
-        container.appendChild(el('div', { class: 'rpt-orders-card' },
+        const card = el('div', { class: 'rpt-orders-card' },
           head,
           el('div', { class: 'table-responsive' },
             el('table', { class: 'table align-middle mb-0' },
               el('thead', {}, el('tr', {},
-                ...['#', 'Product Name', 'Category', 'Qty Sold', 'Revenue'].map((h, i) =>
-                  el('th', { class: i >= 3 ? 'text-end' : '', text: h })))),
-              tbody))));
+                ...[['Order #', ''], ['Date & Time', ''], ['Cashier', ''], ['Items', ''],
+                    ['Status', ''], ['Payment', ''], ['Total', 'text-end']].map(([h, cls]) =>
+                  el('th', { class: cls, text: h })))),
+              tbody)));
+        container.appendChild(card);
+
+        // Fetch real orders for the selected date range (to is inclusive — server adds a day).
+        let list;
+        try {
+          list = await Api.get(`/api/orders/recent?take=200&from=${fromIn.value}&to=${toIn.value}`);
+        } catch (e) {
+          tbody.appendChild(el('tr', {}, el('td', { colspan: 7 }, empty('bi-exclamation-triangle', e.message))));
+          return;
+        }
+
+        if (!list || !list.length) {
+          tbody.appendChild(el('tr', {}, el('td', { colspan: 7 }, empty('bi-receipt', 'No orders in this range.'))));
+          return;
+        }
+
+        list.forEach((o) => {
+          const status = (o.status || '').toLowerCase();
+          tbody.appendChild(el('tr', {},
+            el('td', { class: 'fw-semibold', text: '#' + o.id }),
+            el('td', { text: dateTime(o.timestamp) }),
+            el('td', { text: o.cashier }),
+            el('td', { class: 'text-truncate', style: 'max-width:260px', title: o.itemSummary,
+              text: o.itemSummary || (o.itemCount + ' item' + (o.itemCount === 1 ? '' : 's')) }),
+            el('td', {}, el('span', { class: 'rpt-status rpt-status-' + status, text: o.status })),
+            el('td', { text: o.paymentMethod }),
+            el('td', { class: 'text-end fw-semibold', text: money(o.totalAmount) })));
+        });
       }
 
       // Menu image resolver (reuse logic from POS if available, fallback)

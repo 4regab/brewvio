@@ -14,8 +14,12 @@ public class OrdersController(OrderService orders, SettingsService settings) : C
     public async Task<IActionResult> Create(CreateOrderRequest req) => Ok(await orders.CreateAsync(req));
 
     [HttpGet("recent")]
-    public async Task<IActionResult> Recent([FromQuery] int take = 50, [FromQuery] DateTime? from = null) =>
-        Ok(await orders.RecentAsync(take, from != null ? DateTime.SpecifyKind(from.Value, DateTimeKind.Utc) : null));
+    public async Task<IActionResult> Recent([FromQuery] int take = 50, [FromQuery] DateTime? from = null,
+        [FromQuery] DateTime? to = null) =>
+        Ok(await orders.RecentAsync(take,
+            from != null ? DateTime.SpecifyKind(from.Value, DateTimeKind.Utc) : null,
+            // `to` is treated as an inclusive day -> add a day for an exclusive upper bound (matches reports).
+            to != null ? DateTime.SpecifyKind(to.Value.Date, DateTimeKind.Utc).AddDays(1) : null));
 
     [HttpGet("export")]
     public async Task<IActionResult> Export([FromQuery] int take = 200) =>
