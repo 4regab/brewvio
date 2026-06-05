@@ -83,6 +83,7 @@ jobs:
       # pooler (6543, PgBouncer transaction mode).
       - name: Apply database migrations
         run: |
+          dotnet restore
           dotnet tool install -g dotnet-ef --version 10.0.8
           dotnet ef database update --project src \
             --connection "${{ secrets.MIGRATION_CONNECTION_STRING }}"
