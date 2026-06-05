@@ -2,7 +2,7 @@
 
 **All-in-one POS and business management system for coffee shops and canteens.**
 
-Chao & Brew handles ordering, inventory, reporting, and staff management in a single web app — built for small F&B operations running on tight margins and tighter budgets.
+This POS handles ordering, inventory, reporting, and staff management in a single web app — built for small F&B operations running on tight margins and tighter budgets.
 
 > BSIT Free Elective 2 — Group 7, 2-1 · Polytechnic University of the Philippines, Quezon City
 
@@ -19,6 +19,7 @@ Chao & Brew handles ordering, inventory, reporting, and staff management in a si
 | **Staff management** | Manager/Cashier roles, self-service sign-up with manager approval, audit trail |
 
 ---
+<img width="800" height=" 600" alt="brewio drawio" src="https://github.com/user-attachments/assets/9c3f5f18-4afd-4ed9-b7a9-1039a92cf6c2" />
 
 ## Tech stack
 
