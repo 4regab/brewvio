@@ -135,11 +135,10 @@ src/
 └── wwwroot/         Static frontend (uploaded to S3)
 
 tests/               xUnit integration tests (real Postgres, per-test transaction rollback)
-infra/               AWS CloudFormation templates (GitHub OIDC role)
 docs/DOCS.md         Full developer reference — API docs, models, services, deployment
 template.yaml        AWS SAM infrastructure definition
 DEPLOYMENT.md        Step-by-step deployment and ops guide
-.github/workflows/   CI/CD pipeline (test → deploy on push to main)
+.github/workflows/   CI/CD pipeline (test → deploy on push to master)
 ```
 
 ---

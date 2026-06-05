@@ -3,8 +3,14 @@ name: Test & Deploy
 on:
   push:
     branches: [master]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
   pull_request:
     branches: [master]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
 
 env:
   AWS_REGION: ap-southeast-2
