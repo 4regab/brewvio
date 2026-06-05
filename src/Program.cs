@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Amazon.Lambda.AspNetCoreServer.Hosting;
+using Amazon.Lambda.AspNetCoreServer;
 using Npgsql;
 using System.Text;
 
@@ -111,7 +112,15 @@ builder.Services.AddAuthorization(options =>
     options.FallbackPolicy = new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build());
 
 // Runs as a normal Kestrel app locally and as an AWS Lambda behind API Gateway HTTP API.
-builder.Services.AddAWSLambdaHosting(LambdaEventSource.HttpApi);
+// API Gateway returns the response body as a UTF-8 string unless the content type is
+// registered as binary — in which case the library Base64-encodes it and sets
+// isBase64Encoded=true. PDF and images are binary by default, but the XLSX MIME type is
+// not, so without this its zip bytes are mangled by UTF-8 encoding and Excel reports the
+// downloaded file as corrupt. Register it as Base64 so spreadsheet downloads arrive intact.
+builder.Services.AddAWSLambdaHosting(LambdaEventSource.HttpApi, options =>
+    options.RegisterResponseContentEncodingForContentType(
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        ResponseContentEncoding.Base64));
 
 var app = builder.Build();
 
