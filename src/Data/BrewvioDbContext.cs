@@ -31,11 +31,15 @@ public class BrewvioDbContext(DbContextOptions<BrewvioDbContext> options) : DbCo
             // Optimistic concurrency on the PostgreSQL system column `xmin` so concurrent stock
             // deductions can't silently overwrite each other (lost update / oversell). A conflicting
             // SaveChanges throws DbUpdateConcurrencyException, which OrderService reloads and retries.
-            // UseXminAsConcurrencyToken is the idiomatic Npgsql 8 mapping (it tracks the existing
-            // system column without adding one); the obsolete hint points at a future EF direction.
-#pragma warning disable CS0618
-            e.UseXminAsConcurrencyToken();
-#pragma warning restore CS0618
+            // Npgsql 10 removed the entity-level UseXminAsConcurrencyToken() shortcut, so we map the
+            // `xmin` system column explicitly as a uint shadow property. This is exactly what the
+            // shortcut emitted (see the migration snapshot) — it tracks the existing system column
+            // without adding a physical column.
+            e.Property<uint>("xmin")
+                .HasColumnName("xmin")
+                .HasColumnType("xid")
+                .ValueGeneratedOnAddOrUpdate()
+                .IsConcurrencyToken();
         });
         modelBuilder.Entity<MenuItem>().Property(x => x.Price).HasPrecision(12, 2);
         modelBuilder.Entity<Modifier>().Property(x => x.PriceDelta).HasPrecision(12, 2);

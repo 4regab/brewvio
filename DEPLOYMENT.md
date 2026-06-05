@@ -131,12 +131,12 @@ receipt → dashboard → inventory → menu performance → sign-up → manager
 ## 4. AWS deployment
 
 Architecture: **CloudFront** (one domain) → S3 (static `wwwroot/`) + API Gateway **HTTP API** →
-**Lambda** (ASP.NET Core 8, arm64) → **Supabase Postgres** over SSL. No VPC/NAT/RDS Proxy needed.
+**Lambda** (ASP.NET Core 10, arm64) → **Supabase Postgres** over SSL. No VPC/NAT/RDS Proxy needed.
 
 ### Prerequisites
 
 - **AWS CLI v2** — <https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html>
-- **.NET 8 SDK** + Amazon Lambda tools: `dotnet tool install -g Amazon.Lambda.Tools`
+- **.NET 10 SDK** + Amazon Lambda tools: `dotnet tool install -g Amazon.Lambda.Tools`
 - Configured credentials: `aws configure`
 
 ### First-time setup: create SSM secrets (once only)

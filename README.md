@@ -22,7 +22,7 @@ processing, inventory tracking, and sales reporting in a single web-based applic
 | Layer         | Technology                                              |
 |---------------|---------------------------------------------------------|
 | Frontend      | HTML5, CSS3, JavaScript, Bootstrap 5 (static SPA)       |
-| Backend       | ASP.NET Core 8 (LTS) Web API — C# (OOP)                 |
+| Backend       | ASP.NET Core 10 (LTS) Web API — C# (OOP)                |
 | Database      | Supabase (managed PostgreSQL) via EF Core / Npgsql      |
 | Hosting       | AWS: CloudFront + S3 (frontend), API Gateway + Lambda (API) |
 
@@ -47,7 +47,7 @@ auto-generated PostgREST data API so the public API key can't reach the tables d
 
 ```
 template.yaml                  AWS SAM infrastructure (Lambda + API Gateway + S3 + CloudFront)
-Brewvio/
+src/
 ├── Program.cs                 App entry point (host, DI, Lambda hosting, middleware)
 ├── appsettings.json           Config (connection string, JWT issuer/audience, logging)
 ├── Properties/                launchSettings.json (local dev profile, http://localhost:5000)
@@ -60,28 +60,28 @@ Brewvio/
 ├── Helpers/                   CurrentUser, PasswordHasher, ExportHelper
 └── wwwroot/                   Static frontend (HTML/CSS/JS) deployed to S3 + CloudFront
 
-tests/Brewvio.Tests/           xUnit service tests (Auth, User, Inventory, Order, Reporting, Shift)
+tests/                         xUnit service tests (Auth, User, Inventory, Order, Reporting, Shift)
 ```
 
 The API runs in Lambda via `Amazon.Lambda.AspNetCoreServer.Hosting`; the static frontend in
 `wwwroot/` is uploaded to S3 and served through CloudFront. Backend tests live in
-Backend tests live in `tests/Brewvio.Tests/` (xUnit against a real PostgreSQL, run with `dotnet test`).
+`tests/` (xUnit against a real PostgreSQL, run with `dotnet test`).
 
 ## Getting Started
 
-Prerequisites: [.NET 8 SDK](https://dotnet.microsoft.com/download) and a Supabase project
+Prerequisites: [.NET 10 SDK](https://dotnet.microsoft.com/download) and a Supabase project
 (free tier). Copy the Supabase connection string into `appsettings.json` or the `DATABASE_URL`
 environment variable. Use the **Supavisor pooler**: transaction mode (port `6543`) for the
 running app, session mode (port `5432`) for EF Core migrations.
 
 ```bash
 # Restore & run locally
-dotnet run --project Brewvio
+dotnet run --project src
 
 # Database migrations (EF Core) — use the session-mode (:5432) connection string
 dotnet tool install --global dotnet-ef        # once
-dotnet ef migrations add InitialCreate --project Brewvio
-dotnet ef database update --project Brewvio
+dotnet ef migrations add InitialCreate --project src
+dotnet ef database update --project src
 ```
 
 ### Deploy to AWS
@@ -89,7 +89,7 @@ dotnet ef database update --project Brewvio
 Infrastructure is defined as code in [`template.yaml`](./template.yaml) (AWS SAM):
 
 1. **API** — the ASP.NET Core Web API is packaged as a Lambda (`Amazon.Lambda.AspNetCoreServer.Hosting`,
-   .NET 8 on arm64) and exposed through an **API Gateway HTTP API**. Secrets (`DATABASE_URL`,
+   .NET 10 on arm64) and exposed through an **API Gateway HTTP API**. Secrets (`DATABASE_URL`,
    `JWT_KEY`) are read at startup from **SSM Parameter Store** under `/brewvio`, not env vars.
 2. **Frontend** — `wwwroot/` is uploaded to a private **S3** bucket (Origin Access Control).
 3. **CDN** — a single **CloudFront** distribution fronts both: default behavior → S3,
