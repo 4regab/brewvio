@@ -138,6 +138,108 @@ public class OrderService(BrewvioDbContext db, CurrentUser current, AuditService
     public Task CancelAsync(string reason) =>
         audit.LogAsync("OrderCancelled", string.IsNullOrWhiteSpace(reason) ? "(no reason given)" : reason);
 
+    // Saves the current cart as a Draft — no payment, no stock deduction, excluded from sales.
+    public async Task<DraftDto> SaveDraftAsync(SaveDraftRequest req)
+    {
+        if (req.Items is null || req.Items.Count == 0)
+            throw new ArgumentException("The cart is empty.");
+
+        var menuIds = req.Items.Select(i => i.MenuItemId).Distinct().ToList();
+        var modIds = req.Items.SelectMany(i => i.ModifierIds ?? Array.Empty<int>()).Distinct().ToList();
+        var menuItems = await db.MenuItems.Include(m => m.Recipe).Where(m => menuIds.Contains(m.Id)).ToDictionaryAsync(m => m.Id);
+        var mods = modIds.Count > 0 ? await db.Modifiers.Where(m => modIds.Contains(m.Id)).ToDictionaryAsync(m => m.Id) : new Dictionary<int, Modifier>();
+
+        var lineItems = new List<TransactionItem>();
+        var usage = new Dictionary<int, decimal>();
+        var subtotal = BuildLineItems(req.Items, menuItems, mods, lineItems, usage);
+        subtotal = Math.Round(subtotal, 2);
+        Discount discount = new FixedAmountDiscount(req.DiscountAmount);
+        var discountAmount = discount.Apply(subtotal);
+
+        var tx = new Transaction
+        {
+            Timestamp = DateTime.UtcNow, Subtotal = subtotal, DiscountAmount = discountAmount,
+            TaxAmount = 0, TotalAmount = 0, PaymentMethod = req.PaymentMethod ?? "Cash",
+            CashierId = current.Id, Status = "Draft",
+            Items = lineItems
+        };
+        db.Transactions.Add(tx);
+        audit.Add("OrderDrafted", $"Draft saved; {lineItems.Count} item(s), discount {discountAmount:0.00}.");
+        await db.SaveChangesAsync();
+        return ToDraft(tx);
+    }
+
+    // Confirms a Draft — runs full payment/stock logic and moves it to Preparing.
+    public async Task<ReceiptDto> ConfirmDraftAsync(int id, ConfirmDraftRequest req)
+    {
+        var tx = await db.Transactions.Include(t => t.Items).FirstOrDefaultAsync(t => t.Id == id && t.Status == "Draft");
+        if (tx is null) throw new InvalidOperationException($"Draft #{id} not found.");
+
+        var taxRate = await settings.GetTaxRateAsync();
+        var payments = req.Payments ?? new List<PaymentInput>();
+        var cashTendered = payments.Where(p => p.Method == "Cash").Sum(p => p.Amount);
+        var gcashTendered = payments.Where(p => p.Method == "GCash").Sum(p => p.Amount);
+        var totalTendered = cashTendered + gcashTendered;
+
+        var discountedSubtotal = tx.Subtotal - tx.DiscountAmount;
+        var tax = Math.Round(discountedSubtotal * taxRate / 100m, 2);
+        var total = discountedSubtotal + tax;
+
+        if (totalTendered + 0.005m < total) throw new ArgumentException("Insufficient payment.");
+        var change = Math.Round(totalTendered - total, 2);
+        var tendered = Math.Round(totalTendered, 2);
+
+        var payRows = new List<Payment>();
+        if (gcashTendered > 0) payRows.Add(new Payment { Method = "GCash", Amount = Math.Min(gcashTendered, total) });
+        var cashApplied = Math.Max(0, total - Math.Min(gcashTendered, total));
+        if (cashApplied > 0 || payRows.Count == 0) payRows.Add(new Payment { Method = "Cash", Amount = cashApplied });
+        var method = gcashTendered > 0 ? "GCash" : "Cash";
+
+        tx.TaxAmount = tax;
+        tx.TotalAmount = total;
+        tx.PaymentMethod = method;
+        tx.Status = "Preparing";
+        tx.Payments = payRows;
+
+        // Deduct stock
+        var menuIds = tx.Items.Select(i => i.MenuItemId).Distinct().ToList();
+        var menuItems = await db.MenuItems.Include(m => m.Recipe).Where(m => menuIds.Contains(m.Id)).ToDictionaryAsync(m => m.Id);
+        var usage = new Dictionary<int, decimal>();
+        foreach (var item in tx.Items)
+            if (menuItems.TryGetValue(item.MenuItemId, out var mi))
+                foreach (var ri in mi.Recipe)
+                    usage[ri.IngredientId] = usage.GetValueOrDefault(ri.IngredientId) + ri.Quantity * item.Quantity;
+
+        audit.Add("DraftConfirmed", $"Draft #{tx.Id} confirmed; total {total:0.00} via {method}.");
+        var warnings = await PersistWithStockAsync(usage);
+        return ToReceipt(tx, current.Username, tendered, change, warnings);
+    }
+
+    public async Task<List<DraftDto>> GetDraftsAsync() =>
+        (await db.Transactions.AsNoTracking()
+            .Where(t => t.Status == "Draft" && t.CashierId == current.Id)
+            .Include(t => t.Items)
+            .OrderByDescending(t => t.Timestamp)
+            .ToListAsync())
+        .Select(ToDraft).ToList();
+
+    public async Task DeleteDraftAsync(int id)
+    {
+        var tx = await db.Transactions.Include(t => t.Items).FirstOrDefaultAsync(t => t.Id == id && t.Status == "Draft");
+        if (tx is null) return;
+        db.Transactions.Remove(tx);
+        audit.Add("DraftDeleted", $"Draft #{id} deleted.");
+        await db.SaveChangesAsync();
+    }
+
+    private static DraftDto ToDraft(Transaction tx)
+    {
+        var summary = string.Join(", ", tx.Items.Select(i => i.Quantity > 1 ? $"{i.Quantity}x {i.ItemName}" : i.ItemName));
+        return new DraftDto(tx.Id, tx.Timestamp, "", tx.PaymentMethod, tx.Subtotal, tx.DiscountAmount,
+            tx.Items.Count, summary,
+            tx.Items.Select(i => new ReceiptLineDto(i.ItemName, i.Quantity, i.UnitPrice, i.LineTotal, i.Modifiers)).ToList());
+    }
+
     // Advances order through the queue: Preparing → Completed.
     private static readonly Dictionary<string, string> NextStatus = new()
     {
@@ -169,8 +271,9 @@ public class OrderService(BrewvioDbContext db, CurrentUser current, AuditService
     public async Task<int> NextOrderNumberAsync() =>
         (await db.Transactions.MaxAsync(t => (int?)t.Id) ?? 0) + 1;
 
-    public async Task<List<TransactionSummaryDto>> RecentAsync(int take = 50) =>
+    public async Task<List<TransactionSummaryDto>> RecentAsync(int take = 50, DateTime? from = null) =>
         await db.Transactions.AsNoTracking()
+            .Where(t => from == null || t.Timestamp >= from)
             .OrderByDescending(t => t.Timestamp)
             .Take(take)
             .Select(t => new TransactionSummaryDto(t.Id, t.Timestamp, t.TotalAmount, t.PaymentMethod, t.Status,

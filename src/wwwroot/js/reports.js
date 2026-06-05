@@ -5,10 +5,10 @@ window.Views = window.Views || {};
   const isoDaysAgo = (n) => { const d = new Date(); d.setDate(d.getDate() - n); return d.toISOString().slice(0, 10); };
 
   const PERIODS = {
-    daily: { label: 'Daily', days: 6 },
-    weekly: { label: 'Weekly', days: 7 * 8 - 1 },
+    daily:   { label: 'Daily',   days: 30 },
+    weekly:  { label: 'Weekly',  days: 7 * 12 - 1 },
     monthly: { label: 'Monthly', days: 365 },
-    yearly: { label: 'Yearly', days: 365 * 3 },
+    yearly:  { label: 'Yearly',  days: 365 * 3 },
   };
 
   const currency = () => (window.App.store && window.App.store.currency) || 'PHP';
@@ -59,7 +59,7 @@ window.Views = window.Views || {};
       const downloadBtn = el('div', { class: 'rpt-download-pill' },
         el('span', { text: 'Download' }),
         el('button', { class: 'rpt-dl-icon', title: 'Download CSV',
-          onClick: () => Api.download('/api/reports/export/csv' + currentQs, 'sales.csv').catch((e) => toast(e.message, 'danger')) },
+          onClick: () => Api.download('/api/reports/export/csv' + currentQs, 'sales.xlsx').catch((e) => toast(e.message, 'danger')) },
           el('i', { class: 'bi bi-download' })));
 
       // No viewToolbar — title is in the topbar, no Show Graph toggle needed
@@ -134,11 +134,15 @@ window.Views = window.Views || {};
             const switchMetric = () => {
               if (chart) chart.destroy();
               const metric = metricSelect.value;
-              if (metric === 'sales') {
-                chart = lineChart(trendCanvas, r.trend.map((t) => t.label), r.trend.map((t) => t.sales), 'Sales');
-              } else {
-                chart = lineChart(trendCanvas, r.trend.map((t) => t.label), r.trend.map((t) => t.transactionCount), 'Transactions');
-              }
+              const labels = r.trend.map((t) => t.label);
+              const values = metric === 'sales'
+                ? r.trend.map((t) => t.sales)
+                : r.trend.map((t) => t.transactionCount);
+              const chartLabel = metric === 'sales' ? 'Sales' : 'Transactions';
+              // Bar for daily (one bar per day is industry standard), line for broader periods
+              chart = period === 'daily'
+                ? barChart(trendCanvas, labels, values, chartLabel)
+                : lineChart(trendCanvas, labels, values, chartLabel);
             };
 
             const chartCol = el('div', { class: 'rpt-chart-col' },
@@ -165,7 +169,10 @@ window.Views = window.Views || {};
 
             graphSection.appendChild(el('div', { class: 'rpt-unified-card' },
               el('div', { class: 'rpt-graph-grid' }, chartCol, favCol)));
-            chart = lineChart(trendCanvas, r.trend.map((t) => t.label), r.trend.map((t) => t.sales), 'Sales');
+            // Initial render — bar for daily, line for broader periods
+            chart = period === 'daily'
+              ? barChart(trendCanvas, r.trend.map((t) => t.label), r.trend.map((t) => t.sales), 'Sales')
+              : lineChart(trendCanvas, r.trend.map((t) => t.label), r.trend.map((t) => t.sales), 'Sales');
           }
 
           // All Orders table

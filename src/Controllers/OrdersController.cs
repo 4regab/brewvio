@@ -14,7 +14,8 @@ public class OrdersController(OrderService orders, SettingsService settings) : C
     public async Task<IActionResult> Create(CreateOrderRequest req) => Ok(await orders.CreateAsync(req));
 
     [HttpGet("recent")]
-    public async Task<IActionResult> Recent([FromQuery] int take = 50) => Ok(await orders.RecentAsync(take));
+    public async Task<IActionResult> Recent([FromQuery] int take = 50, [FromQuery] DateTime? from = null) =>
+        Ok(await orders.RecentAsync(take, from != null ? DateTime.SpecifyKind(from.Value, DateTimeKind.Utc) : null));
 
     [HttpGet("export")]
     public async Task<IActionResult> Export([FromQuery] int take = 200) =>
@@ -54,6 +55,24 @@ public class OrdersController(OrderService orders, SettingsService settings) : C
     public async Task<IActionResult> Cancel(CancelOrderRequest req)
     {
         await orders.CancelAsync(req.Reason);
+        return NoContent();
+    }
+
+    // Draft order — save cart without payment or stock deduction.
+    [HttpPost("draft")]
+    public async Task<IActionResult> SaveDraft(SaveDraftRequest req) => Ok(await orders.SaveDraftAsync(req));
+
+    [HttpGet("drafts")]
+    public async Task<IActionResult> GetDrafts() => Ok(await orders.GetDraftsAsync());
+
+    [HttpPost("{id:int}/confirm")]
+    public async Task<IActionResult> ConfirmDraft(int id, ConfirmDraftRequest req) =>
+        Ok(await orders.ConfirmDraftAsync(id, req));
+
+    [HttpDelete("{id:int}/draft")]
+    public async Task<IActionResult> DeleteDraft(int id)
+    {
+        await orders.DeleteDraftAsync(id);
         return NoContent();
     }
 }

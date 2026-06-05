@@ -19,13 +19,17 @@ public class ReportingServiceTests(SharedTestDb fixture) : IClassFixture<SharedT
     {
         using var t = fixture.Begin();
         await DatabaseInitializer.SeedAllOriginalAsync(t.Db);
+        SettingsService.ResetTaxRateCache();
         var orders = BuildOrders(t);
         var latte = t.Db.MenuItems.First(m => m.Name == "Caffe Latte");
 
         for (var i = 0; i < 2; i++)
-            await orders.CreateAsync(new CreateOrderRequest(
+        {
+            var r = await orders.CreateAsync(new CreateOrderRequest(
                 new List<CartItemInput> { new(latte.Id, 1, new List<int>(), null) }, 0m,
                 new List<PaymentInput> { new("Cash", 200m) }));
+            await orders.AdvanceStatusAsync(r.TransactionId); // → Completed
+        }
 
         var report = await new ReportingService(t.Db).GenerateAsync(
             DateTime.UtcNow.Date, DateTime.UtcNow.Date.AddDays(1));
@@ -40,17 +44,22 @@ public class ReportingServiceTests(SharedTestDb fixture) : IClassFixture<SharedT
     {
         using var t = fixture.Begin();
         await DatabaseInitializer.SeedAllOriginalAsync(t.Db);
+        SettingsService.ResetTaxRateCache();
         var orders = BuildOrders(t);
         var latte = t.Db.MenuItems.First(m => m.Name == "Caffe Latte");
         var espresso = t.Db.MenuItems.First(m => m.Name == "Espresso");
 
         for (var i = 0; i < 3; i++)
-            await orders.CreateAsync(new CreateOrderRequest(
+        {
+            var r = await orders.CreateAsync(new CreateOrderRequest(
                 new List<CartItemInput> { new(latte.Id, 1, new List<int>(), null) }, 0m,
                 new List<PaymentInput> { new("Cash", 200m) }));
-        await orders.CreateAsync(new CreateOrderRequest(
+            await orders.AdvanceStatusAsync(r.TransactionId);
+        }
+        var r2 = await orders.CreateAsync(new CreateOrderRequest(
             new List<CartItemInput> { new(espresso.Id, 1, new List<int>(), null) }, 0m,
             new List<PaymentInput> { new("Cash", 200m) }));
+        await orders.AdvanceStatusAsync(r2.TransactionId);
 
         var report = await new ReportingService(t.Db).GenerateAsync(
             DateTime.UtcNow.Date, DateTime.UtcNow.Date.AddDays(1), "daily");
@@ -67,12 +76,14 @@ public class ReportingServiceTests(SharedTestDb fixture) : IClassFixture<SharedT
     {
         using var t = fixture.Begin();
         await DatabaseInitializer.SeedAllOriginalAsync(t.Db);
+        SettingsService.ResetTaxRateCache();
         var orders = BuildOrders(t);
         var latte = t.Db.MenuItems.First(m => m.Name == "Caffe Latte");
 
-        await orders.CreateAsync(new CreateOrderRequest(
+        var r = await orders.CreateAsync(new CreateOrderRequest(
             new List<CartItemInput> { new(latte.Id, 1, new List<int>(), null) }, 0m,
             new List<PaymentInput> { new("Cash", 200m) }));
+        await orders.AdvanceStatusAsync(r.TransactionId);
 
         var report = await new ReportingService(t.Db).GenerateAsync(
             DateTime.UtcNow.Date.AddDays(-40), DateTime.UtcNow.Date.AddDays(1), "monthly");

@@ -24,15 +24,30 @@ public class ReportingService(BrewvioDbContext db)
                 && ti.Transaction.Timestamp >= fromUtc && ti.Transaction.Timestamp < toUtc)
             .Select(ti => new { ti.MenuItemId, ti.ItemName, ti.Quantity, ti.LineTotal })
             .ToListAsync();
+
         var category = await db.MenuItems.ToDictionaryAsync(m => m.Id, m => m.Category);
 
-        var totalSales = txns.Sum(t => t.TotalAmount);
-        var totalTax = txns.Sum(t => t.TaxAmount);
+        // Cost per menu item = sum(ingredient.CostPerUnit * recipe.Quantity)
+        var recipeCosts = await db.RecipeIngredients
+            .Include(r => r.Ingredient)
+            .GroupBy(r => r.MenuItemId)
+            .ToDictionaryAsync(
+                g => g.Key,
+                g => g.Sum(r => r.Quantity * r.Ingredient.CostPerUnit));
+
+        var totalSales    = txns.Sum(t => t.TotalAmount);
+        var totalTax      = txns.Sum(t => t.TaxAmount);
         var totalDiscounts = txns.Sum(t => t.DiscountAmount);
-        var count = txns.Count;
-        var itemsSold = items.Sum(i => i.Quantity);
-        var aov = count == 0 ? 0 : Math.Round(totalSales / count, 2);
-        var summary = new SalesSummaryDto(totalSales, count, aov, totalDiscounts, totalTax, itemsSold);
+        var count         = txns.Count;
+        var itemsSold     = items.Sum(i => i.Quantity);
+        var aov           = count == 0 ? 0 : Math.Round(totalSales / count, 2);
+
+        // Overall profit margin
+        var totalCost = items.Sum(i => recipeCosts.GetValueOrDefault(i.MenuItemId, 0m) * i.Quantity);
+        var totalProfit = totalSales - totalCost;
+        var profitMarginPct = totalSales == 0 ? 0m : Math.Round(totalProfit / totalSales * 100m, 2);
+
+        var summary = new SalesSummaryDto(totalSales, count, aov, totalDiscounts, totalTax, itemsSold, profitMarginPct);
 
         // Revenue trend bucketed by the requested period.
         var trend = txns
@@ -44,10 +59,13 @@ public class ReportingService(BrewvioDbContext db)
         var performance = items.GroupBy(i => new { i.MenuItemId, i.ItemName })
             .Select(g =>
             {
-                var qty = g.Sum(x => x.Quantity);
+                var qty     = g.Sum(x => x.Quantity);
                 var revenue = g.Sum(x => x.LineTotal);
+                var cost    = recipeCosts.GetValueOrDefault(g.Key.MenuItemId, 0m) * qty;
+                var profit  = Math.Round(revenue - cost, 2);
+                var margin  = revenue == 0 ? 0m : Math.Round(profit / revenue * 100m, 2);
                 return new MenuPerformanceDto(g.Key.MenuItemId, g.Key.ItemName,
-                    category.GetValueOrDefault(g.Key.MenuItemId, ""), qty, revenue);
+                    category.GetValueOrDefault(g.Key.MenuItemId, ""), qty, revenue, profit, margin);
             })
             .OrderByDescending(p => p.QuantitySold).ToList();
 
@@ -69,17 +87,17 @@ public class ReportingService(BrewvioDbContext db)
         switch (period)
         {
             case "weekly":
-                // ISO week (Mon-anchored) -> "yyyy-Www".
-                var week = ISOWeek.GetWeekOfYear(d);
-                var year = ISOWeek.GetYear(d);
-                return ($"{year}-W{week:00}", $"{year}{week:00}");
+                var week  = ISOWeek.GetWeekOfYear(d);
+                var year  = ISOWeek.GetYear(d);
+                var weekStart = ISOWeek.ToDateTime(year, week, DayOfWeek.Monday);
+                return (weekStart.ToString("MMM dd"), $"{year}{week:00}");
             case "monthly":
                 return (d.ToString("yyyy-MM"), d.ToString("yyyyMM"));
             case "yearly":
                 return (d.ToString("yyyy"), d.ToString("yyyy"));
             case "daily":
             default:
-                return (d.ToString("yyyy-MM-dd"), d.ToString("yyyyMMdd"));
+                return (d.ToString("MMM dd"), d.ToString("yyyyMMdd"));
         }
     }
 }

@@ -174,5 +174,115 @@ public static class DatabaseInitializer
             new AppSetting { Key = "TaxRatePercent", Value = "0" });
 
         await db.SaveChangesAsync();
+
+        // Seed 3 months of sales history (March – May 2026)
+        await SeedSalesAsync(db);
+    }
+
+    /// <summary>
+    /// Seeds realistic transaction history for March, April, and May 2026.
+    /// Targets ₱1,000–₱5,000 total daily revenue by accumulating small single-order
+    /// transactions (1–2 items, qty 1) until the daily budget is reached.
+    /// </summary>
+    public static async Task SeedSalesAsync(BrewvioDbContext db, bool force = false)
+    {
+        // Skip if sales data already exists (unless force override)
+        if (!force && await db.Transactions.AnyAsync()) return;
+
+        // Force mode: wipe existing sales data before re-seeding
+        if (force)
+        {
+            await db.Payments.ExecuteDeleteAsync();
+            await db.TransactionItems.ExecuteDeleteAsync();
+            await db.Transactions.ExecuteDeleteAsync();
+        }
+
+        var cashier = await db.Users.FirstAsync(u => u.Role == Roles.Cashier && u.IsActive);
+        var menu    = await db.MenuItems.ToListAsync();
+        var rng     = new Random(42);
+
+        // Beverages sell more than food
+        string[] bevCategories = ["Cold Brew Coffee", "Non-Coffee", "Matcha Series", "Frappe", "Fruit Soda"];
+        var bevItems  = menu.Where(m => bevCategories.Contains(m.Category)).ToList();
+        var foodItems = menu.Where(m => !bevCategories.Contains(m.Category)).ToList();
+
+        var periods = new[]
+        {
+            (new DateOnly(2026, 3, 1), new DateOnly(2026, 3, 31)),
+            (new DateOnly(2026, 4, 1), new DateOnly(2026, 4, 30)),
+            (new DateOnly(2026, 5, 1), new DateOnly(2026, 5, 31)),
+        };
+
+        var transactions = new List<Transaction>();
+
+        foreach (var (start, end) in periods)
+        {
+            for (var date = start; date <= end; date = date.AddDays(1))
+            {
+                // Daily revenue target: ₱1,000 – ₱5,000
+                decimal dailyTarget = rng.Next(1000, 5001);
+                decimal dailyTotal  = 0m;
+
+                while (dailyTotal < dailyTarget)
+                {
+                    int hour   = rng.Next(8, 20);
+                    int minute = rng.Next(0, 60);
+                    int second = rng.Next(0, 60);
+                    var ts = new DateTime(date.Year, date.Month, date.Day, hour, minute, second, DateTimeKind.Utc);
+
+                    // Most orders: 1 item, qty 1. Occasionally 2 items.
+                    int itemCount = rng.NextDouble() < 0.75 ? 1 : 2;
+                    var items = new List<TransactionItem>();
+
+                    for (int i = 0; i < itemCount; i++)
+                    {
+                        MenuItem picked;
+                        if (rng.NextDouble() < 0.70 && bevItems.Count > 0)
+                            picked = bevItems[rng.Next(bevItems.Count)];
+                        else if (foodItems.Count > 0)
+                            picked = foodItems[rng.Next(foodItems.Count)];
+                        else
+                            picked = menu[rng.Next(menu.Count)];
+
+                        items.Add(new TransactionItem
+                        {
+                            MenuItemId = picked.Id,
+                            ItemName   = picked.Name,
+                            UnitPrice  = picked.Price,
+                            Quantity   = 1,
+                            LineTotal  = picked.Price,
+                        });
+                    }
+
+                    decimal subtotal = items.Sum(x => x.LineTotal);
+                    decimal discountAmount = rng.NextDouble() < 0.10
+                        ? Math.Round(subtotal * 0.10m, 2) : 0m;
+                    decimal total = Math.Round(subtotal - discountAmount, 2);
+
+                    string method = rng.NextDouble() < 0.60 ? "Cash" : "Card";
+                    decimal cashTendered = method == "Cash"
+                        ? Math.Ceiling(total / 50m) * 50m : total;
+
+                    transactions.Add(new Transaction
+                    {
+                        Timestamp      = ts,
+                        Subtotal       = subtotal,
+                        DiscountAmount = discountAmount,
+                        TaxAmount      = 0m,
+                        TotalAmount    = total,
+                        PaymentMethod  = method,
+                        CashierId      = cashier.Id,
+                        Status         = "Completed",
+                        Items          = items,
+                        Payments       = [new Payment { Method = method, Amount = cashTendered }],
+                    });
+
+                    dailyTotal += total;
+                }
+            }
+        }
+
+        db.Transactions.AddRange(transactions);
+        await db.SaveChangesAsync();
     }
 }

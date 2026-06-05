@@ -656,28 +656,6 @@ a:hover { color: var(--brew-blue-d); }
   line-height: 1.25; color: var(--brew-ink); margin-bottom: .3rem;
 }
 /* Category pill — overlaid top-left of the photo */
-.menu-tile .cat-label {
-  position: absolute; top: .45rem; left: .45rem;
-  display: inline-block; width: fit-content;
-  font-size: .6rem; font-weight: 600; text-transform: uppercase; letter-spacing: .03em;
-  padding: .15rem .5rem; border-radius: 999px;
-  background: var(--brew-espresso-l); color: var(--brew-espresso);
-  pointer-events: none;
-}
-/* Category-specific colored pills */
-.menu-tile .cat-label[data-cat="espresso"]    { background: #f5ece0; color: #5a3d21; }
-.menu-tile .cat-label[data-cat="coffee"]      { background: #f5ece0; color: #5a3d21; }
-.menu-tile .cat-label[data-cat="cold"]        { background: #e6f7f5; color: #0e5f54; }
-.menu-tile .cat-label[data-cat="iced"]        { background: #e6f7f5; color: #0e5f54; }
-.menu-tile .cat-label[data-cat="cold-brew-coffee"] { background: #f0e8df; color: #5a3d21; }
-.menu-tile .cat-label[data-cat="tea"]         { background: #e8f5e0; color: #2d5a16; }
-.menu-tile .cat-label[data-cat="non-coffee"]  { background: #fce8f5; color: #7a1a5a; }
-.menu-tile .cat-label[data-cat="matcha-series"] { background: #e8f5e0; color: #2d5a16; }
-.menu-tile .cat-label[data-cat="frappe"]      { background: #e6efff; color: #1a3a7a; }
-.menu-tile .cat-label[data-cat="fruit-soda"]  { background: #fff0e6; color: #7a3a10; }
-.menu-tile .cat-label[data-cat="food"]        { background: #fce8e8; color: #7a1a1a; }
-.menu-tile .cat-label[data-cat="pastry"]      { background: #fce8e8; color: #7a1a1a; }
-.menu-tile .cat-label[data-cat="qik's-fried-noodles"] { background: #fef5e0; color: #7a5010; }
 
 .menu-tile .price {
   font-family: 'Inter', sans-serif; font-weight: 700; font-size: .9rem;
@@ -742,19 +720,7 @@ a:hover { color: var(--brew-blue-d); }
   font-family: 'Inter', sans-serif; font-weight: 700; font-size: 1.05rem;
   color: var(--brew-ink);
 }
-.cart-header-icon {
-  width: 34px; height: 34px; border-radius: 10px;
-  background: var(--brew-espresso); display: grid; place-items: center;
-  color: #fff; font-size: .95rem; flex-shrink: 0;
-}
 .cart-header .order-number { font-weight: 600; font-size: .88rem; flex: 1; color: var(--brew-ink); }
-.cart-header-edit {
-  background: rgba(255,255,255,0.6); border: 1px solid var(--brew-border);
-  cursor: pointer; font-size: .9rem; width: 32px; height: 32px;
-  display: grid; place-items: center; border-radius: 8px; transition: background .12s, color .12s;
-  flex-shrink: 0;
-}
-.cart-header-edit:hover { background: var(--brew-espresso); color: #fff; border-color: var(--brew-espresso); }
 
 /* Cart line item — separator lines between items */
 .cart-line {
@@ -815,82 +781,51 @@ a:hover { color: var(--brew-blue-d); }
   margin: .55rem 0 .15rem;
 }
 
-/* Promo + Payment Method row above Place Order */
+/* Discount selector + Payment method selector row above Place Order */
 .cart-actions .checkout-row {
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: 1fr 1fr;
   gap: .55rem;
   margin-bottom: .65rem;
 }
-.cart-actions .promo-wrap {
-  position: relative;
+.cart-actions .discount-wrap {
   display: flex;
   align-items: center;
 }
-.cart-actions .promo-input {
+.cart-actions .discount-select,
+.cart-actions .pay-method-select {
   width: 100%;
   border: 1px solid var(--brew-border);
   border-radius: 999px;
-  padding: .55rem 2.4rem .55rem 1rem;
+  padding: .55rem 2rem .55rem 1rem;
   font-size: .78rem;
   font-family: 'Inter', sans-serif;
+  font-weight: 600;
   color: var(--brew-ink);
-  background: var(--brew-surface);
+  background-color: var(--brew-surface);
   outline: none;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23999'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right .85rem center;
   transition: border-color .15s, box-shadow .15s;
+  box-shadow: none;
 }
-.cart-actions .promo-input::placeholder { color: var(--brew-muted); font-size: .76rem; }
-.cart-actions .promo-input:focus {
+.cart-actions .discount-select:focus,
+.cart-actions .pay-method-select:focus {
   border-color: var(--brew-espresso);
   box-shadow: 0 0 0 3px rgba(90,61,33,.08);
 }
-.cart-actions .promo-apply {
-  position: absolute;
-  right: .35rem;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 28px; height: 28px;
-  border-radius: 999px;
-  border: 1px solid var(--brew-border);
-  background: var(--brew-surface);
-  color: var(--brew-muted);
-  display: grid; place-items: center;
-  cursor: pointer;
-  transition: background .12s, color .12s, border-color .12s;
-  font-size: .8rem;
-}
-.cart-actions .promo-apply:hover {
-  background: var(--brew-espresso);
-  color: #fff;
-  border-color: var(--brew-espresso);
-}
-
-/* Payment Method pill — outline rounded button */
-.cart-actions .pay-method-pill {
-  border: 1px solid var(--brew-border);
-  background: var(--brew-surface);
-  color: var(--brew-ink);
-  border-radius: 999px;
-  padding: .55rem 1.05rem;
-  font-size: .78rem;
-  font-weight: 600;
-  font-family: 'Inter', sans-serif;
-  cursor: pointer;
-  transition: background .12s, color .12s, border-color .12s;
-  white-space: nowrap;
-}
-.cart-actions .pay-method-pill:hover:not(:disabled) {
-  background: var(--brew-espresso-l);
-  border-color: var(--brew-espresso);
-  color: var(--brew-espresso);
-}
-.cart-actions .pay-method-pill:disabled { opacity: .45; cursor: not-allowed; }
+.cart-actions .pay-method-select:disabled { opacity: .45; cursor: not-allowed; }
 
 /* Place Order / Confirm — ALWAYS ESPRESSO (global + cart-scoped) */
 .btn-complete {
   background: var(--brew-espresso); border: none; color: #fff;
   border-radius: var(--r-btn); font-weight: 600;
-  padding: .85rem 1.5rem; font-size: .9rem; font-family: 'Inter', sans-serif;
+  padding: .35rem .75rem; font-size: .78rem; font-family: 'Inter', sans-serif;
   cursor: pointer; transition: background .15s;
 }
 .btn-complete:hover { background: var(--brew-espresso-d); color: #fff; }

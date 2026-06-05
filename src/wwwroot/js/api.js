@@ -17,9 +17,13 @@ const Api = (() => {
     const res = await fetch(url, { method, headers, body: body !== undefined ? JSON.stringify(body) : undefined });
 
     if (res.status === 401) {
-      setToken(null);
-      window.dispatchEvent(new Event('brewvio:unauthorized'));
-      throw new ApiError('Your session has expired. Please sign in again.', 401);
+      // Auth endpoints return 401 for bad credentials — don't treat that as a session expiry.
+      const isAuthEndpoint = url === '/api/auth/login' || url === '/api/auth/register' || url.startsWith('/api/auth/status');
+      if (!isAuthEndpoint) {
+        setToken(null);
+        window.dispatchEvent(new Event('brewvio:unauthorized'));
+        throw new ApiError('Your session has expired. Please sign in again.', 401);
+      }
     }
     if (res.status === 204) return null;
     const text = await res.text();

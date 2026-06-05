@@ -1,6 +1,6 @@
-# Brewvio — Environment, Local Dev & Deployment
+# Chao & Brew — Environment, Local Dev & Deployment
 
-This guide covers running Brewvio locally, the environment variables it reads, the test setup,
+This guide covers running Chao & Brew locally, the environment variables it reads, the test setup,
 and deploying to AWS (Lambda + S3 + CloudFront).
 
 ---

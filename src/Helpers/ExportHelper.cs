@@ -60,16 +60,13 @@ public static class ExportHelper
         using var wb = new XLWorkbook();
         var ws = wb.Worksheets.Add("Orders");
 
-        // Header row — bold, light grey background
+        // Header row — bold only, no custom colors (avoids ClosedXML corruption on Linux)
         var headers = new[] { "Order #", "Timestamp", "Cashier", "Items", "Status", "Payment", "Total" };
         for (var c = 0; c < headers.Length; c++)
         {
             var cell = ws.Cell(1, c + 1);
             cell.Value = headers[c];
             cell.Style.Font.Bold = true;
-            cell.Style.Fill.BackgroundColor = XLColor.FromHtml("#F2F2F2");
-            cell.Style.Border.BottomBorder = XLBorderStyleValues.Thin;
-            cell.Style.Border.BottomBorderColor = XLColor.FromHtml("#CCCCCC");
         }
 
         // Data rows
@@ -77,7 +74,6 @@ public static class ExportHelper
         foreach (var o in orders)
         {
             ws.Cell(row, 1).Value = o.Id;
-            // Use Unspecified kind — ClosedXML serialises DateTime correctly on Linux
             ws.Cell(row, 2).Value = DateTime.SpecifyKind(o.Timestamp, DateTimeKind.Unspecified);
             ws.Cell(row, 2).Style.NumberFormat.Format = "yyyy-mm-dd hh:mm:ss";
             ws.Cell(row, 3).Value = o.Cashier;
@@ -89,17 +85,82 @@ public static class ExportHelper
             row++;
         }
 
-        // Fixed column widths — AdjustToContents can corrupt on Lambda/Linux
-        ws.Column(1).Width = 10;  // Order #
-        ws.Column(2).Width = 22;  // Timestamp
-        ws.Column(3).Width = 20;  // Cashier
-        ws.Column(4).Width = 8;   // Items
-        ws.Column(5).Width = 14;  // Status
-        ws.Column(6).Width = 12;  // Payment
-        ws.Column(7).Width = 14;  // Total
-
-        // Freeze the header row
+        ws.Column(1).Width = 10;
+        ws.Column(2).Width = 22;
+        ws.Column(3).Width = 20;
+        ws.Column(4).Width = 8;
+        ws.Column(5).Width = 14;
+        ws.Column(6).Width = 12;
+        ws.Column(7).Width = 14;
         ws.SheetView.FreezeRows(1);
+
+        using var ms = new MemoryStream();
+        wb.SaveAs(ms);
+        return ms.ToArray();
+    }
+
+    public static byte[] SalesReportXlsx(ReportDto r)
+    {
+        using var wb = new XLWorkbook();
+
+        // ── Sheet 1: Summary ──────────────────────────────────────────────
+        var sum = wb.Worksheets.Add("Summary");
+        var summaryRows = new[]
+        {
+            ("Total Sales",         r.Summary.TotalSales.ToString("N2")),
+            ("Transactions",        r.Summary.TransactionCount.ToString()),
+            ("Items Sold",          r.Summary.ItemsSold.ToString()),
+            ("Avg Order Value",     r.Summary.AverageOrderValue.ToString("N2")),
+            ("Total Discounts",     r.Summary.TotalDiscounts.ToString("N2")),
+            ("Total Tax",           r.Summary.TotalTax.ToString("N2")),
+        };
+        sum.Cell(1, 1).Value = "Metric";   sum.Cell(1, 1).Style.Font.Bold = true;
+        sum.Cell(1, 2).Value = "Value";    sum.Cell(1, 2).Style.Font.Bold = true;
+        for (var i = 0; i < summaryRows.Length; i++)
+        {
+            sum.Cell(i + 2, 1).Value = summaryRows[i].Item1;
+            sum.Cell(i + 2, 2).Value = summaryRows[i].Item2;
+        }
+        sum.Column(1).Width = 24;
+        sum.Column(2).Width = 18;
+
+        // ── Sheet 2: Revenue Trend ────────────────────────────────────────
+        var trend = wb.Worksheets.Add("Revenue Trend");
+        trend.Cell(1, 1).Value = "Period";       trend.Cell(1, 1).Style.Font.Bold = true;
+        trend.Cell(1, 2).Value = "Sales";        trend.Cell(1, 2).Style.Font.Bold = true;
+        trend.Cell(1, 3).Value = "Transactions"; trend.Cell(1, 3).Style.Font.Bold = true;
+        for (var i = 0; i < r.Trend.Count; i++)
+        {
+            trend.Cell(i + 2, 1).Value = r.Trend[i].Label;
+            trend.Cell(i + 2, 2).Value = r.Trend[i].Sales;
+            trend.Cell(i + 2, 2).Style.NumberFormat.Format = "#,##0.00";
+            trend.Cell(i + 2, 3).Value = r.Trend[i].TransactionCount;
+        }
+        trend.Column(1).Width = 16;
+        trend.Column(2).Width = 16;
+        trend.Column(3).Width = 16;
+        trend.SheetView.FreezeRows(1);
+
+        // ── Sheet 3: Menu Performance ─────────────────────────────────────
+        var perf = wb.Worksheets.Add("Menu Performance");
+        perf.Cell(1, 1).Value = "Product";    perf.Cell(1, 1).Style.Font.Bold = true;
+        perf.Cell(1, 2).Value = "Category";   perf.Cell(1, 2).Style.Font.Bold = true;
+        perf.Cell(1, 3).Value = "Qty Sold";   perf.Cell(1, 3).Style.Font.Bold = true;
+        perf.Cell(1, 4).Value = "Revenue";    perf.Cell(1, 4).Style.Font.Bold = true;
+        for (var i = 0; i < r.MenuPerformance.Count; i++)
+        {
+            var m = r.MenuPerformance[i];
+            perf.Cell(i + 2, 1).Value = m.Name;
+            perf.Cell(i + 2, 2).Value = m.Category;
+            perf.Cell(i + 2, 3).Value = m.QuantitySold;
+            perf.Cell(i + 2, 4).Value = m.Revenue;
+            perf.Cell(i + 2, 4).Style.NumberFormat.Format = "#,##0.00";
+        }
+        perf.Column(1).Width = 32;
+        perf.Column(2).Width = 22;
+        perf.Column(3).Width = 12;
+        perf.Column(4).Width = 16;
+        perf.SheetView.FreezeRows(1);
 
         using var ms = new MemoryStream();
         wb.SaveAs(ms);
@@ -110,8 +171,8 @@ public static class ExportHelper
     public static byte[] ReceiptPdf(ReceiptDto r, string storeName, string address, string currency) =>
         Document.Create(doc => doc.Page(page =>
         {
-            // 80 mm thermal receipt width, height auto-sized to content
-            page.Size(227, 9999, Unit.Point); // 80 mm = ~227pt; height is trimmed by QuestPDF
+            // 80 mm wide, height auto-fits to content — no blank space at bottom
+            page.ContinuousSize(227, Unit.Point);
             page.Margin(14);
             page.DefaultTextStyle(x => x.FontSize(8).FontFamily("Courier New"));
 

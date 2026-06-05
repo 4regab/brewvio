@@ -56,6 +56,7 @@ public class SettingsServiceTests(SharedTestDb fixture) : IClassFixture<SharedTe
     {
         using var t = fixture.Begin();
         await DatabaseInitializer.SeedAllOriginalAsync(t.Db);
+        SettingsService.ResetTaxRateCache();
 
         Assert.Equal(12m, await Build(t).GetTaxRateAsync());
     }
@@ -65,6 +66,7 @@ public class SettingsServiceTests(SharedTestDb fixture) : IClassFixture<SharedTe
     {
         using var t = fixture.Begin();
         // No seed — settings table is empty.
+        SettingsService.ResetTaxRateCache();
 
         Assert.Equal(0m, await Build(t).GetTaxRateAsync());
     }

@@ -32,4 +32,11 @@
     <None Include="appsettings.*.local.json" CopyToOutputDirectory="Never" CopyToPublishDirectory="Never" />
   </ItemGroup>
 
+  <!-- Allow test project to access internal members (e.g. SettingsService.ResetTaxRateCache) -->
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
+      <_Parameter1>Brewvio.Tests</_Parameter1>
+    </AssemblyAttribute>
+  </ItemGroup>
+
 </Project>

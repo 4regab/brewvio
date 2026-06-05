@@ -163,6 +163,22 @@ app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
 
+// --seed-sales: seed 3 months of sales into the live DB then exit (no web server started).
+// --force-seed-sales: same but skips the "transactions already exist" guard (for re-seeding).
+if (args.Contains("--seed-sales") || args.Contains("--force-seed-sales"))
+{
+    using var scope = app.Services.CreateScope();
+    var db = scope.ServiceProvider.GetRequiredService<BrewvioDbContext>();
+    bool force = args.Contains("--force-seed-sales");
+    app.Logger.LogInformation("Running SeedSalesAsync against live DB (force={Force})…", force);
+    if (force)
+        await DatabaseInitializer.SeedSalesAsync(db, force: true);
+    else
+        await DatabaseInitializer.SeedSalesAsync(db);
+    app.Logger.LogInformation("SeedSalesAsync complete.");
+    return;
+}
+
 // Seed demo data only outside Lambda. On Lambda the DB is already migrated/seeded,
 // and running EF queries during cold-start init can stall the function.
 if (string.IsNullOrEmpty(Environment.GetEnvironmentVariable("AWS_LAMBDA_FUNCTION_NAME")))

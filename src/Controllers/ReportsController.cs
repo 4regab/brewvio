@@ -25,7 +25,9 @@ public class ReportsController(ReportingService reports, SettingsService setting
     {
         var (f, t) = Range(from, to);
         var report = await reports.GenerateAsync(f, t, period);
-        return File(ExportHelper.SalesReportCsv(report), "text/csv", $"sales_{f:yyyyMMdd}-{t.AddDays(-1):yyyyMMdd}.csv");
+        return File(ExportHelper.SalesReportXlsx(report),
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            $"sales_{f:yyyyMMdd}-{t.AddDays(-1):yyyyMMdd}.xlsx");
     }
 
     [HttpGet("export/pdf")]

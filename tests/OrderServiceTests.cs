@@ -23,6 +23,7 @@ public class OrderServiceTests(SharedTestDb fixture) : IClassFixture<SharedTestD
     {
         using var t = fixture.Begin();
         await DatabaseInitializer.SeedAllOriginalAsync(t.Db);
+        SettingsService.ResetTaxRateCache();
         var (svc, db) = Build(t);
         var latte = db.MenuItems.First(m => m.Name == "Caffe Latte");
         decimal Stock(string n) => t.NewContext().Ingredients.First(i => i.Name == n).StockLevel;
@@ -31,7 +32,7 @@ public class OrderServiceTests(SharedTestDb fixture) : IClassFixture<SharedTestD
         var receipt = await svc.CreateAsync(new CreateOrderRequest(Cart(latte.Id, 2), 0m,
             new List<PaymentInput> { new("Cash", 500m) }));
 
-        Assert.Equal("Completed", receipt.Status);
+        Assert.Equal("Preparing", receipt.Status);
         Assert.Equal(280m, receipt.Subtotal);
         Assert.Equal(33.60m, receipt.TaxAmount);
         Assert.Equal(313.60m, receipt.TotalAmount);
@@ -107,6 +108,7 @@ public class OrderServiceTests(SharedTestDb fixture) : IClassFixture<SharedTestD
 
         var sale = await svc.CreateAsync(new CreateOrderRequest(Cart(latte.Id, 1), 0m,
             new List<PaymentInput> { new("Cash", 200m) }));
+        await svc.AdvanceStatusAsync(sale.TransactionId); // Preparing → Completed
         var afterSale = Stock("Whole Milk");
 
         var refunded = await svc.RefundAsync(sale.TransactionId, "Customer changed their mind");
@@ -152,6 +154,7 @@ public class OrderServiceTests(SharedTestDb fixture) : IClassFixture<SharedTestD
         var latte = db.MenuItems.First(m => m.Name == "Caffe Latte");
         var sale = await svc.CreateAsync(new CreateOrderRequest(Cart(latte.Id, 1), 0m,
             new List<PaymentInput> { new("Cash", 200m) }));
+        await svc.AdvanceStatusAsync(sale.TransactionId); // → Completed
 
         await svc.RefundAsync(sale.TransactionId, "First refund");
 
@@ -168,6 +171,7 @@ public class OrderServiceTests(SharedTestDb fixture) : IClassFixture<SharedTestD
         var latte = db.MenuItems.First(m => m.Name == "Caffe Latte");
         var sale = await svc.CreateAsync(new CreateOrderRequest(Cart(latte.Id, 1), 0m,
             new List<PaymentInput> { new("Cash", 200m) }));
+        await svc.AdvanceStatusAsync(sale.TransactionId); // → Completed
 
         await Assert.ThrowsAsync<ArgumentException>(() =>
             svc.RefundAsync(sale.TransactionId, "   "));

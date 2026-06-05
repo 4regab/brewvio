@@ -17,6 +17,13 @@ public record ReceiptDto(int TransactionId, DateTime Timestamp, string Cashier, 
     IReadOnlyList<ReceiptLineDto> Items, IReadOnlyList<PaymentInput> Payments,
     IReadOnlyList<string> StockWarnings);
 
+// ----- Draft order -----
+public record SaveDraftRequest(IReadOnlyList<CartItemInput> Items, decimal DiscountAmount, string PaymentMethod);
+public record ConfirmDraftRequest(IReadOnlyList<PaymentInput> Payments);
+public record DraftDto(int Id, DateTime Timestamp, string Cashier, string PaymentMethod,
+    decimal Subtotal, decimal DiscountAmount, int ItemCount, string ItemSummary,
+    IReadOnlyList<ReceiptLineDto> Items);
+
 // ----- Cancel (pre-payment, audit only) & refund (existing transaction) -----
 public record CancelOrderRequest(string Reason);
 public record RefundRequest(string Reason);

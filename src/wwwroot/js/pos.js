@@ -2,8 +2,10 @@ window.Views = window.Views || {};
 (function () {
   const { el, money, esc, button, toast, modal, closeModal, promptReason, spinner, empty, dateTime } = UI;
 
+  const isoDaysAgo = (n) => { const d = new Date(); d.setDate(d.getDate() - n); return d.toISOString().slice(0, 10); };
+
   let menu = [], modifiers = [], cart = [], discount = 0, activeCat = 'All', seq = 1, searchQuery = '';
-  let cartItemsEl, totalsEl, chargeBtn, cancelBtn, payMethodBtn, promoInputEl, menuGrid, menuTabsEl;
+  let cartItemsEl, totalsEl, chargeBtn, cancelBtn, payMethodBtn, promoInputEl, menuGrid, menuTabsEl, discountSelect;
 
   const IMG_BASE = 'img/';
 
@@ -207,10 +209,8 @@ window.Views = window.Views || {};
     if (!items.length) { menuGrid.appendChild(empty('bi-cup', 'No items found.')); return; }
 
     items.forEach((m) => {
-      const catKey = (m.category || '').toLowerCase().replace(/\s+/g, '-');
       const tile = el('button', { class: 'menu-tile', onClick: () => addToCart(m) },
         el('div', { class: 'menu-tile-photo' },
-          el('div', { class: 'cat-label', 'data-cat': catKey, text: m.category || '' }),
           el('img', { src: menuImage(m), alt: m.name, loading: 'lazy' })),
         el('div', { class: 'menu-tile-body' },
           el('div', { class: 'name', text: m.name }),
@@ -290,6 +290,7 @@ window.Views = window.Views || {};
   }
 
   function openPayment() {
+    if (!cart.length) return; // guard: don't open if cart was cleared
     const t = totals();
     let method = 'Cash';
     const cashIn = el('input', { type: 'number', min: '0', step: '0.01', class: 'form-control form-control-lg', value: t.total.toFixed(2) });
@@ -331,11 +332,14 @@ window.Views = window.Views || {};
           discountAmount: discount || 0,
           payments: [{ method, amount: tendered }],
         });
-        cart = []; discount = 0; if (promoInputEl) promoInputEl.value = ''; renderCart();
+        cart = []; discount = 0; if (promoInputEl) promoInputEl.value = ''; if (discountSelect) discountSelect.value = '0'; renderCart();
         // Update order number for next order
         try { const nr = await Api.get('/api/orders/next-number'); cartOrderNumEl.textContent = 'Order Number: #' + String(nr.nextId).padStart(3, '0'); } catch { /* non-critical */ }
         (receipt.stockWarnings || []).forEach((w) => toast(w, 'warning'));
-        showReceipt(receipt, true);
+        closeModal();
+        // Wait for Bootstrap's hide animation to finish before opening the receipt modal
+        const modalEl = document.getElementById('app-modal');
+        modalEl.addEventListener('hidden.bs.modal', () => showReceipt(receipt, true), { once: true });
       } catch (e) { toast(e.message, 'danger'); confirm.disabled = false; }
     });
 
@@ -420,6 +424,20 @@ window.Views = window.Views || {};
       catch (e) { root.innerHTML = ''; root.appendChild(empty('bi-exclamation-triangle', e.message)); return; }
       root.innerHTML = '';
 
+      // Restore a draft if Edit was clicked from Orders page
+      if (window._draftToLoad) {
+        const d = window._draftToLoad;
+        window._draftToLoad = null;
+        cart = [];
+        d.items.forEach((di) => {
+          const menuItem = menu.find((m) => m.name === di.name) || { id: di.menuItemId || 0, name: di.name, price: di.unitPrice, category: '' };
+          const mods = di.modifiers ? di.modifiers.split(', ').map((mn) => modifiers.find((mod) => mod.name === mn)).filter(Boolean) : [];
+          const k = (menuItem.id || di.name) + ':' + mods.map((m) => m.id).sort((a, b) => a - b).join(',');
+          cart.push({ uid: seq++, key: k, menuItemId: menuItem.id, name: di.name, price: di.unitPrice, quantity: di.quantity, modifiers: mods.map((m) => ({ id: m.id, name: m.name, priceDelta: m.priceDelta })), img: menuItem ? menuImage(menuItem) : '' });
+        });
+        discount = d.discountAmount || 0;
+      }
+
       // Fetch next order number
       let nextOrderNum = '---';
       try { const r = await Api.get('/api/orders/next-number'); nextOrderNum = String(r.nextId).padStart(3, '0'); } catch { /* non-critical */ }
@@ -487,38 +505,54 @@ window.Views = window.Views || {};
       totalsEl = el('div', { class: 'cart-totals' });
 
       chargeBtn = el('button', { class: 'btn-complete', disabled: true, onClick: openPayment }, 'Place Order');
-      cancelBtn = button('Cancel order', 'btn-outline-danger btn-sm w-100 mt-2', async () => {
-        const reason = await promptReason({ title: 'Cancel order', label: 'Reason for cancellation', confirmText: 'Cancel order', confirmClass: 'btn-danger' });
-        if (reason == null) return;
-        try { await Api.post('/api/orders/cancel', { reason }); cart = []; discount = 0; if (promoInputEl) promoInputEl.value = ''; renderCart(); toast('Order cancelled.'); }
-        catch (e) { toast(e.message, 'danger'); }
+      cancelBtn = button('Draft Order', 'btn-outline-secondary btn-sm w-100 mt-2', async () => {
+        if (!cart.length) return;
+        try {
+          const selectedMethod = payMethodBtn ? payMethodBtn.value : 'Cash';
+          await Api.post('/api/orders/draft', {
+            items: cart.map((l) => ({ menuItemId: l.menuItemId, quantity: l.quantity, modifierIds: l.modifiers.map((m) => m.id), notes: null })),
+            discountAmount: discount || 0,
+            paymentMethod: selectedMethod,
+          });
+          cart = []; discount = 0;
+          if (promoInputEl) promoInputEl.value = '';
+          if (discountSelect) discountSelect.value = '0';
+          renderCart();
+          toast('Draft saved. Find it in Orders.', 'success');
+        } catch (e) { toast(e.message, 'danger'); }
       });
 
-      // Promo / voucher input — drives discount amount
-      const promoInput = el('input', {
-        type: 'number', min: '0', step: '0.01', placeholder: 'Add Promo or Voucher',
-        class: 'promo-input', value: discount || '',
-        onInput: (e) => { discount = Math.max(0, Number(e.target.value) || 0); renderTotals(); },
+      // Discount selector — drives discount amount (replaces free-text promo input)
+      const discountPresets = [0, 5, 10, 15, 20];
+      discountSelect = el('select', {
+        class: 'discount-select',
+        onChange: (e) => {
+          const pct = Number(e.target.value) || 0;
+          const subtotal = cart.reduce((s, l) => s + (l.price + l.modifiers.reduce((ms, m) => ms + m.priceDelta, 0)) * l.quantity, 0);
+          discount = Math.round(subtotal * pct / 100 * 100) / 100;
+          if (promoInputEl) promoInputEl.value = discount || '';
+          renderTotals();
+        },
       });
+      discountPresets.forEach((pct) =>
+        discountSelect.appendChild(el('option', { value: String(pct), text: pct === 0 ? 'No Discount' : pct + '% Off' })));
+      // Keep promoInputEl pointing at a hidden input so openPayment reset logic still works
+      const promoInput = el('input', { type: 'hidden', value: '0' });
       promoInputEl = promoInput;
-      const promoApplyBtn = el('button', {
-        class: 'promo-apply', type: 'button', title: 'Apply promo',
-        onClick: () => { discount = Math.max(0, Number(promoInput.value) || 0); renderTotals(); },
-      }, el('i', { class: 'bi bi-tag' }));
-      const promoRow = el('div', { class: 'promo-wrap' }, promoInput, promoApplyBtn);
 
-      payMethodBtn = el('button', {
-        class: 'pay-method-pill', type: 'button', disabled: true,
-        onClick: openPayment,
-      }, 'Payment Method');
+      // Payment method selector — visual only; openPayment modal still handles actual method
+      payMethodBtn = el('select', { class: 'pay-method-select', disabled: true });
+      [{ key: 'Cash', label: 'Cash' }, { key: 'GCash', label: 'GCash' }].forEach((m, i) =>
+        payMethodBtn.appendChild(el('option', { value: m.key, text: m.label, selected: i === 0 })));
 
-      const checkoutRow = el('div', { class: 'checkout-row' }, promoRow, payMethodBtn);
+      const checkoutRow = el('div', { class: 'checkout-row' },
+        el('div', { class: 'discount-wrap' }, discountSelect),
+        payMethodBtn);
 
       const cartOrderNumEl = el('div', { class: 'cart-header-eyebrow', text: 'Order Number: #' + nextOrderNum });
 
       const cartPanel = el('div', { class: 'cart-panel' },
         el('div', { class: 'cart-header' },
-          el('div', { class: 'cart-header-icon' }, el('i', { class: 'bi bi-receipt' })),
           el('div', { class: 'cart-header-title' },
             el('div', { class: 'cart-header-name', text: 'New Order' }),
             cartOrderNumEl)),
@@ -553,7 +587,8 @@ window.Views = window.Views || {};
 
       const tabQueue = el('button', { class: 'activity-tab active', text: 'Order Queue', onClick: () => switchTab('queue') });
       const tabHistory = el('button', { class: 'activity-tab', text: 'Order History', onClick: () => switchTab('history') });
-      const tabGroup = el('div', { class: 'activity-tabs-group' }, tabQueue, tabHistory);
+      const tabDrafts = el('button', { class: 'activity-tab', text: 'Drafts', onClick: () => switchTab('drafts') });
+      const tabGroup = el('div', { class: 'activity-tabs-group' }, tabQueue, tabHistory, tabDrafts);
       const downloadBtn = button('<i class="bi bi-download"></i> Download', 'btn-sm btn-outline-secondary',
         () => Api.download('/api/orders/export?take=200', 'orders.xlsx').catch((e) => toast(e.message, 'danger')));
       const tabs = el('div', { class: 'activity-tabs-row' }, tabGroup, filtersEl, downloadBtn);
@@ -569,7 +604,11 @@ window.Views = window.Views || {};
         activeTab = tab;
         tabQueue.classList.toggle('active', tab === 'queue');
         tabHistory.classList.toggle('active', tab === 'history');
-        if (tab === 'queue') renderQueue(); else renderHistory();
+        tabDrafts.classList.toggle('active', tab === 'drafts');
+        filtersEl.innerHTML = ''; // hide filters on drafts tab
+        if (tab === 'queue') renderQueue();
+        else if (tab === 'history') renderHistory();
+        else renderDrafts();
       }
 
       // ── Queue list renderer (reused when filter changes) ──
@@ -618,9 +657,81 @@ window.Views = window.Views || {};
         });
       }
 
+      async function renderDrafts() {
+        content.innerHTML = ''; content.appendChild(spinner());
+        let drafts;
+        try { drafts = await Api.get('/api/orders/drafts'); }
+        catch (e) { content.innerHTML = ''; content.appendChild(empty('bi-exclamation-triangle', e.message)); return; }
+        content.innerHTML = '';
+        if (!drafts.length) { content.appendChild(empty('bi-file-earmark', 'No drafts yet.')); return; }
+        const list = el('div', { class: 'order-queue' });
+        drafts.forEach((d) => {
+          const card = el('div', { class: 'order-card' },
+            el('div', { class: 'order-info' },
+              el('div', { class: 'order-name', text: 'Draft #' + String(d.id).padStart(3, '0') }),
+              el('div', { class: 'order-meta', text: dateTime(d.timestamp) + ' \u00B7 ' + d.itemSummary }),
+              d.discountAmount > 0 ? el('div', { class: 'order-meta', text: 'Discount: ' + money(d.discountAmount) }) : null),
+            el('div', { class: 'order-right' },
+              el('div', { class: 'order-total', text: money(d.subtotal - d.discountAmount) }),
+              el('div', { class: 'order-status mt-1 d-flex align-items-center gap-2' },
+                el('span', { class: 'badge badge-soft-muted', text: 'Draft' }),
+                button('Edit', 'btn-sm btn-outline-secondary', () => {
+                  window._draftToLoad = d;
+                  location.hash = '#pos';
+                }),
+                button('Confirm', 'btn-sm btn-complete', () => {
+                  const t = d.subtotal - d.discountAmount;
+                  let method = d.paymentMethod || 'Cash';
+                  const cashIn = el('input', { type: 'number', min: '0', step: '0.01', class: 'form-control form-control-lg' });
+                  cashIn.value = t.toFixed(2); // set DOM property, not just the attribute
+                  const changeRow = el('div', { class: 'd-flex justify-content-between fs-5 mt-3' },
+                    el('span', { text: 'Change' }), el('span', { class: 'fw-bold change-val', text: money(0) }));
+                  const cashLabel = el('label', { class: 'form-label', text: method === 'GCash' ? 'GCash amount' : 'Cash tendered' });
+                  cashIn.addEventListener('input', () => {
+                    const v = Number(cashIn.value) || 0;
+                    changeRow.querySelector('.change-val').textContent = money(Math.max(0, v - t));
+                  });
+                  const seg = el('div', { class: 'btn-group w-100 mb-3' });
+                  const setMethod = (m) => {
+                    method = m;
+                    Array.from(seg.children).forEach((b) => b.className = 'btn ' + (b.dataset.method === m ? 'btn-primary' : 'btn-outline-secondary'));
+                    cashLabel.textContent = m === 'GCash' ? 'GCash amount' : 'Cash tendered';
+                  };
+                  [{ key: 'Cash', label: 'Cash' }, { key: 'GCash', label: 'GCash' }].forEach((m) =>
+                    seg.appendChild(el('button', {
+                      class: 'btn ' + (m.key === method ? 'btn-primary' : 'btn-outline-secondary'),
+                      text: m.label, dataset: { method: m.key }, onClick: () => setMethod(m.key),
+                    })));
+                  const confirmBtn = button('Confirm payment', 'btn-complete btn-lg w-100', async () => {
+                    const tendered = Number(cashIn.value) || 0;
+                    if (tendered + 0.005 < t) { toast('Insufficient payment.', 'warning'); return; }
+                    confirmBtn.disabled = true;
+                    try {
+                      const receipt = await Api.post(`/api/orders/${d.id}/confirm`, { payments: [{ method, amount: tendered }] });
+                      closeModal();
+                      renderDrafts();
+                      // Wait for Bootstrap hide animation before showing receipt
+                      const modalEl = document.getElementById('app-modal');
+                      modalEl.addEventListener('hidden.bs.modal', () => showReceipt(receipt, true), { once: true });
+                    } catch (e) { toast(e.message, 'danger'); confirmBtn.disabled = false; }
+                  });
+                  modal({ title: 'Confirm Draft #' + String(d.id).padStart(3, '0'),
+                    body: el('div', {}, seg, el('div', { class: 'mb-2' }, cashLabel, cashIn), changeRow),
+                    footer: [confirmBtn] });
+                }),
+                button('Delete', 'btn-sm btn-outline-danger', async () => {
+                  try { await Api.delete(`/api/orders/${d.id}/draft`); renderDrafts(); }
+                  catch (e) { toast(e.message, 'danger'); }
+                }))));
+          list.appendChild(card);
+        });
+        content.appendChild(list);
+      }
+
       async function renderQueue() {
         content.innerHTML = ''; content.appendChild(spinner());
-        try { currentList = await Api.get('/api/orders/recent?take=50'); }
+        const todayStart = new Date(); todayStart.setHours(0,0,0,0);
+        try { currentList = await Api.get(`/api/orders/recent?take=200&from=${todayStart.toISOString().slice(0,10)}`); }
         catch (e) { content.innerHTML = ''; content.appendChild(empty('bi-exclamation-triangle', e.message)); return; }
         content.innerHTML = '';
         listEl = el('div', { class: 'order-queue' });
@@ -667,7 +778,8 @@ window.Views = window.Views || {};
 
       async function renderHistory() {
         content.innerHTML = ''; content.appendChild(spinner());
-        try { historyList = await Api.get('/api/orders/recent?take=100'); }
+        const fromDate = isoDaysAgo(30);
+        try { historyList = await Api.get(`/api/orders/recent?take=500&from=${fromDate}`); }
         catch (e) { content.innerHTML = ''; content.appendChild(empty('bi-exclamation-triangle', e.message)); return; }
         renderFilterChips();
         renderHistoryList();

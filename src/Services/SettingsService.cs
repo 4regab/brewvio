@@ -63,6 +63,13 @@ public class SettingsService(BrewvioDbContext db, AuditService audit)
         _taxRateCachedAt = DateTime.UtcNow;
     }
 
+    // Clears the in-process tax rate cache. Used by tests to prevent cross-test contamination.
+    internal static void ResetTaxRateCache()
+    {
+        _cachedTaxRate = null;
+        _taxRateCachedAt = DateTime.MinValue;
+    }
+
     // "USB backup" adapted to the web stack: a downloadable JSON snapshot of core tables.
     // Users are projected explicitly (Id/Username/FullName/Role/IsActive) to avoid leaking PasswordHash.
     // Transactions are projected to avoid circular reference via Cashier navigation property.

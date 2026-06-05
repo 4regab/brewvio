@@ -107,16 +107,41 @@ const UI = (() => {
   function lineChart(canvas, labels, data, label) {
     return new Chart(canvas, {
       type: 'line',
-      data: { labels, datasets: [{ label, data, borderColor: '#1c4a39', backgroundColor: 'rgba(28,74,57,.12)', fill: true, tension: .3, pointRadius: 3, pointBackgroundColor: '#1c4a39' }] },
-      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } },
+      data: { labels, datasets: [{ label, data,
+        borderColor: '#5a3d21', backgroundColor: 'rgba(90,61,33,.08)',
+        fill: true, tension: .35, pointRadius: 4, pointBackgroundColor: '#5a3d21',
+        pointHoverRadius: 6, borderWidth: 2 }] },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: { callbacks: { label: (ctx) => ' ' + ctx.parsed.y.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) } },
+        },
+        scales: {
+          x: { grid: { display: false }, ticks: { maxRotation: 45, font: { size: 11 } } },
+          y: { beginAtZero: true, grid: { color: 'rgba(0,0,0,.06)' }, ticks: { font: { size: 11 }, callback: (v) => v.toLocaleString() } },
+        },
+      },
     });
   }
 
   function barChart(canvas, labels, data, label) {
     return new Chart(canvas, {
       type: 'bar',
-      data: { labels, datasets: [{ label, data, backgroundColor: '#246048', borderRadius: 6, maxBarThickness: 46 }] },
-      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } },
+      data: { labels, datasets: [{ label, data,
+        backgroundColor: 'rgba(90,61,33,.75)', hoverBackgroundColor: '#5a3d21',
+        borderRadius: 4, maxBarThickness: 40 }] },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: { callbacks: { label: (ctx) => ' ' + ctx.parsed.y.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) } },
+        },
+        scales: {
+          x: { grid: { display: false }, ticks: { maxRotation: 45, font: { size: 11 } } },
+          y: { beginAtZero: true, grid: { color: 'rgba(0,0,0,.06)' }, ticks: { font: { size: 11 }, callback: (v) => v.toLocaleString() } },
+        },
+      },
     });
   }
 

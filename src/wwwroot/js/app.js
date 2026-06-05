@@ -4,7 +4,7 @@ const App = (() => {
   // Point of Sales, Activity (Order Queue + Order History), Report, Inventory, Settings
   const NAV = [
     { id: 'pos', label: 'Point of Sales', icon: 'bi-cup-hot-fill', roles: ['Manager', 'Cashier'] },
-    { id: 'activity', label: 'Activity', icon: 'bi-receipt-cutoff', roles: ['Manager', 'Cashier'] },
+    { id: 'activity', label: 'Orders', icon: 'bi-receipt-cutoff', roles: ['Manager', 'Cashier'] },
     { id: 'reports', label: 'Report', icon: 'bi-graph-up-arrow', roles: ['Manager'] },
     { id: 'inventory', label: 'Inventory', icon: 'bi-box-seam', roles: ['Manager', 'Cashier'] },
     { id: 'menu', label: 'Menu Edit', icon: 'bi-card-list', roles: ['Manager'] },
