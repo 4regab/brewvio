@@ -114,7 +114,7 @@ const App = (() => {
         });
         window._reportsLoaded = true;
       }
-      if (['inventory', 'menu', 'users', 'settings'].includes(id) && !window._manageLoaded) {
+      if (['inventory', 'menu', 'users', 'audit', 'settings'].includes(id) && !window._manageLoaded) {
         await new Promise((resolve, reject) => {
           const s = document.createElement('script');
           s.src = 'js/manage.js?v=20260606k';
