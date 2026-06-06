@@ -119,7 +119,7 @@ window.Views = window.Views || {};
           onSubmit: async (v) => {
             const payload = { code: v.code, name: v.name, category: v.category, unit: v.unit, stockLevel: i ? i.stockLevel : v.stockLevel, threshold: v.threshold, costPerUnit: i ? i.costPerUnit : 0 };
             if (i) await Api.put('/api/inventory/' + i.id, payload); else await Api.post('/api/inventory', payload);
-            Api.bustCache('/api/inventory'); toast('Item saved.'); reload();
+            Api.bustCache('/api/inventory'); Api.bustCache('/api/menu'); toast('Item saved.'); reload();
           },
         });
       }
@@ -131,7 +131,7 @@ window.Views = window.Views || {};
             { name: 'reason', label: 'Reason', type: 'textarea', required: true },
           ],
           submitText: 'Apply adjustment',
-          onSubmit: async (v) => { await Api.post(`/api/inventory/${i.id}/adjust`, { newQuantity: v.newQuantity, reason: v.reason }); Api.bustCache('/api/inventory'); toast('Stock adjusted.'); reload(); },
+          onSubmit: async (v) => { await Api.post(`/api/inventory/${i.id}/adjust`, { newQuantity: v.newQuantity, reason: v.reason }); Api.bustCache('/api/inventory'); Api.bustCache('/api/menu'); toast('Stock adjusted.'); reload(); },
         });
       }
     },

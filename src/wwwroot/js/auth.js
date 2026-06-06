@@ -25,12 +25,6 @@ const Auth = (() => {
     else    { btn.disabled = false; if (btn.dataset.label) btn.innerHTML = btn.dataset.label; }
   }
 
-  function field(labelText, inputEl) {
-    return el('div', { class: 'mb-3' },
-      el('label', { class: 'auth-label', text: labelText }),
-      inputEl);
-  }
-
   // ---------- Login screen ----------
   function loginScreen(role = 'Cashier') {
     const user = el('input', { class: 'form-control', autocomplete: 'username', placeholder: 'Enter your username' });
@@ -85,47 +79,6 @@ const Auth = (() => {
     setTimeout(() => user.focus(), 80);
   }
 
-  // ---------- Sign-up screen ----------
-  function signupScreen(role = 'Cashier') {
-    const full = el('input', { class: 'form-control', placeholder: 'Full name' });
-    const user = el('input', { class: 'form-control', autocomplete: 'username', placeholder: 'Username' });
-    const pass = el('input', { type: 'password', class: 'form-control', autocomplete: 'new-password', placeholder: 'Password (min 6 characters)' });
-    const roleSel = el('select', { class: 'form-select' },
-      el('option', { value: 'Cashier', selected: role !== 'Manager' }, 'Cashier'),
-      el('option', { value: 'Manager', selected: role === 'Manager' }, 'Manager'));
-    const err    = el('div', { class: 'auth-error d-none' });
-    const submit = button('Create Account', 'btn-primary w-100');
-    submit.type  = 'submit';
-
-    const form = el('form', { class: 'auth-form', onSubmit: async (e) => {
-      e.preventDefault();
-      err.classList.add('d-none');
-      if (!user.value.trim()) { err.textContent = 'Username is required.'; err.classList.remove('d-none'); return; }
-      if (pass.value.length < 6) { err.textContent = 'Password must be at least 6 characters.'; err.classList.remove('d-none'); return; }
-      setBusy(submit, true, 'Submitting…');
-      try {
-        await Api.register({ username: user.value.trim(), fullName: full.value.trim(), password: pass.value, role: roleSel.value });
-        authenticatingScreen(user.value.trim(), roleSel.value);
-      } catch (ex) { setBusy(submit, false); err.textContent = ex.message; err.classList.remove('d-none'); }
-    }},
-      field('Full Name', full),
-      field('Username',  user),
-      el('div', { class: 'mb-3' },
-        el('label', { class: 'auth-label', text: 'Role' }), roleSel),
-      field('Password', pass),
-      err, submit);
-
-    mount(el('div', { class: 'auth-card' },
-      el('button', { class: 'auth-back', type: 'button', onClick: () => loginScreen(role) },
-        el('i', { class: 'bi bi-arrow-left' }), ' Back'),
-      el('h2', { class: 'auth-title', text: 'Sign Up' }),
-      form,
-      el('div', { class: 'auth-foot' },
-        el('span', { text: 'Already have an account? ' }),
-        el('a', { href: '#', class: 'auth-link', onClick: (e) => { e.preventDefault(); loginScreen(role); } }, 'Log In'))));
-    setTimeout(() => full.focus(), 80);
-  }
-
   // ---------- Authenticating (pending approval) ----------
   function authenticatingScreen(username, role) {
     const statusLine = el('p', { class: 'auth-status-text', text: 'Waiting for a manager to approve your account…' });
@@ -170,12 +123,6 @@ const Auth = (() => {
       el('p',  { class: 'auth-sub', text: 'Your request was declined. Contact your manager.' }),
       button('Back to Login', 'btn-outline-secondary w-100 mt-2', () => loginScreen(role))));
   }
-
-  // Demo credentials hint
-  const demoHint = () => el('div', { class: 'auth-demo' },
-    el('div', { class: 'auth-demo-title', text: 'Demo accounts' }),
-    el('div', { html: 'Manager — <code>manager</code> / <code>Manager@123</code>' }),
-    el('div', { html: 'Cashier — <code>cashier</code> / <code>Cashier@123</code>' }));
 
   function start() { show(); loginScreen(); }
 

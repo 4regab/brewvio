@@ -1,6 +1,6 @@
 window.Views = window.Views || {};
 (function () {
-  const { el, money, button, toast, spinner, empty, lineChart, barChart, doughnutChart, dateTime, esc } = UI;
+  const { el, money, button, toast, spinner, empty, lineChart, barChart, dateTime } = UI;
 
   const isoDaysAgo = (n) => { const d = new Date(); d.setDate(d.getDate() - n); return d.toISOString().slice(0, 10); };
 

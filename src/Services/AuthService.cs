@@ -54,8 +54,12 @@ public class AuthService(BrewvioDbContext db, IConfiguration config, AuditServic
         if (await db.Users.AnyAsync(u => u.Username == req.Username, ct))
             throw new InvalidOperationException("That username is already taken.");
 
-        // A sign-up may request Manager or Cashier; it stays Pending until approved either way.
-        var role = req.Role == Roles.Manager ? Roles.Manager : Roles.Cashier;
+        // Self-service sign-ups are always created as Cashier. Manager accounts must be created
+        // by an existing Manager (POST /api/users) or promoted via PUT /api/users/{id} after
+        // approval — a self-chosen "Manager" role here would let an unapproved stranger request
+        // elevated access that an inattentive approver could grant in one click. The account
+        // still stays Pending until a Manager approves it either way.
+        var role = Roles.Cashier;
         var user = new User
         {
             Username = req.Username.Trim(),

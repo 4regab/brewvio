@@ -100,6 +100,41 @@ public class OrderServiceTests(SharedTestDb fixture) : IClassFixture<SharedTestD
     }
 
     [Fact]
+    public async Task CreateOrder_rejects_discount_above_max_percent()
+    {
+        using var t = fixture.Begin();
+        await DatabaseInitializer.SeedAllOriginalAsync(t.Db);
+        SettingsService.ResetTaxRateCache();
+        var (svc, db) = Build(t);
+        var latte = db.MenuItems.First(m => m.Name == "Caffe Latte");
+
+        // Subtotal 140; default cap is 50% (= 70). A 140 discount would zero out the order.
+        await Assert.ThrowsAsync<ArgumentException>(() => svc.CreateAsync(
+            new CreateOrderRequest(Cart(latte.Id, 1), 140m,
+                new List<PaymentInput> { new("Cash", 140m) })));
+
+        var verify = t.NewContext();
+        Assert.Equal(0, await verify.Transactions.CountAsync());
+    }
+
+    [Fact]
+    public async Task CreateOrder_allows_discount_at_the_max_percent_boundary()
+    {
+        using var t = fixture.Begin();
+        await DatabaseInitializer.SeedAllOriginalAsync(t.Db);
+        SettingsService.ResetTaxRateCache();
+        var (svc, db) = Build(t);
+        var latte = db.MenuItems.First(m => m.Name == "Caffe Latte");
+
+        // Subtotal 140; exactly 50% (= 70) is allowed.
+        var receipt = await svc.CreateAsync(new CreateOrderRequest(Cart(latte.Id, 1), 70m,
+            new List<PaymentInput> { new("Cash", 200m) }));
+
+        Assert.Equal(70m, receipt.DiscountAmount);
+        Assert.Equal(70m, receipt.TotalAmount);
+    }
+
+    [Fact]
     public async Task Refund_restocks_ingredients_and_marks_refunded()
     {
         using var t = fixture.Begin();

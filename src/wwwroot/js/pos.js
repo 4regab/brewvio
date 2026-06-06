@@ -215,9 +215,16 @@ window.Views = window.Views || {};
     if (!items.length) { menuGrid.appendChild(empty('bi-cup', 'No items found.')); return; }
 
     items.forEach((m) => {
-      const tile = el('button', { class: 'menu-tile', onClick: () => addToCart(m) },
+      const out = m.available === false;
+      const tile = el('button', {
+          class: 'menu-tile' + (out ? ' is-unavailable' : ''),
+          disabled: out,
+          title: out ? 'Out of stock' : '',
+          onClick: () => { if (!out) addToCart(m); }
+        },
         el('div', { class: 'menu-tile-photo' },
-          el('img', { src: menuImage(m), alt: m.name, loading: 'lazy' })),
+          el('img', { src: menuImage(m), alt: m.name, loading: 'lazy' }),
+          out ? el('div', { class: 'menu-tile-oos', text: 'Out of stock' }) : null),
         el('div', { class: 'menu-tile-body' },
           el('div', { class: 'name', text: m.name }),
           el('div', { class: 'price', text: money(m.price) })));
@@ -341,6 +348,9 @@ window.Views = window.Views || {};
         cart = []; discount = 0; if (promoInputEl) promoInputEl.value = ''; if (discountSelect) discountSelect.value = '0'; renderCart();
         // Bust inventory cache — stock levels changed after the sale
         Api.bustCache('/api/inventory');
+        // Stock changed, so menu availability may have changed too — refresh the grid.
+        Api.bustCache('/api/menu');
+        try { menu = await Api.cachedGet('/api/menu'); renderMenu(); } catch { /* non-critical */ }
         // Update order number for next order
         try { const nr = await Api.get('/api/orders/next-number'); cartOrderNumEl.textContent = 'Order Number: #' + String(nr.nextId).padStart(3, '0'); } catch { /* non-critical */ }
         (receipt.stockWarnings || []).forEach((w) => toast(w, 'warning'));
@@ -397,6 +407,7 @@ window.Views = window.Views || {};
             try {
               await Api.post(`/api/orders/${orderId}/refund`, { reason });
               toast('Refunded. Stock restored.', 'success');
+              Api.bustCache('/api/inventory'); Api.bustCache('/api/menu');
               closeModal();
             } catch (e) { toast(e.message, 'danger'); }
           })
@@ -832,7 +843,7 @@ window.Views = window.Views || {};
             tx.status === 'Completed' ? button('Refund', 'btn-sm btn-outline-danger', async () => {
               const reason = await promptReason({ title: 'Refund #' + tx.id, label: 'Reason for refund', confirmText: 'Refund', confirmClass: 'btn-danger' });
               if (reason == null) return;
-              try { await Api.post(`/api/orders/${tx.id}/refund`, { reason }); toast('Refunded. Stock restored.'); renderHistory(); }
+              try { await Api.post(`/api/orders/${tx.id}/refund`, { reason }); Api.bustCache('/api/inventory'); Api.bustCache('/api/menu'); toast('Refunded. Stock restored.'); renderHistory(); }
               catch (e) { toast(e.message, 'danger'); }
             }) : null);
           tbody.appendChild(el('tr', {},

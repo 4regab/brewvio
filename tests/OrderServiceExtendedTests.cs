@@ -125,7 +125,7 @@ public class OrderServiceExtendedTests(SharedTestDb fixture) : IClassFixture<Sha
     }
 
     [Fact]
-    public async Task CreateOrder_emits_negative_stock_warning_when_oversold()
+    public async Task CreateOrder_is_rejected_when_ingredient_is_out_of_stock()
     {
         using var t = fixture.Begin();
         await DatabaseInitializer.SeedAllOriginalAsync(t.Db);
@@ -136,30 +136,40 @@ public class OrderServiceExtendedTests(SharedTestDb fixture) : IClassFixture<Sha
         milk.StockLevel = 0m; // empty
         await db.SaveChangesAsync();
 
-        var receipt = await svc.CreateAsync(new CreateOrderRequest(
-            Cart(latte.Id, 1), 0m,
-            new List<PaymentInput> { new("Cash", 200m) }));
+        // Ordering must be blocked rather than driving stock negative.
+        var ex = await Assert.ThrowsAsync<InsufficientStockException>(() =>
+            svc.CreateAsync(new CreateOrderRequest(
+                Cart(latte.Id, 1), 0m,
+                new List<PaymentInput> { new("Cash", 200m) })));
+        Assert.Contains("Whole Milk", ex.Message);
 
-        Assert.Contains(receipt.StockWarnings, w => w.Contains("negative"));
+        // Stock is untouched and no transaction was recorded.
+        var verify = t.NewContext();
+        Assert.Equal(0m, verify.Ingredients.First(i => i.Name == "Whole Milk").StockLevel);
+        Assert.Empty(verify.Transactions);
     }
 
-    // ── Discount clamped to subtotal ──────────────────────────────────────────
+    // ── Discount cap (free-order fraud prevention) ────────────────────────────
 
     [Fact]
-    public async Task CreateOrder_discount_exceeding_subtotal_is_clamped_to_subtotal()
+    public async Task CreateOrder_discount_exceeding_max_percent_is_rejected()
     {
         using var t = fixture.Begin();
         await DatabaseInitializer.SeedAllOriginalAsync(t.Db);
         var (svc, db) = Build(t);
         var latte = db.MenuItems.First(m => m.Name == "Caffe Latte"); // ₱140
 
-        var receipt = await svc.CreateAsync(new CreateOrderRequest(
-            Cart(latte.Id, 1), 999m,       // discount > subtotal
-            new List<PaymentInput> { new("Cash", 200m) }));
+        // A discount larger than the configured cap (default 50% = ₱70) must be rejected,
+        // not silently clamped — this is what prevents zeroing out an order.
+        var ex = await Assert.ThrowsAsync<ArgumentException>(() =>
+            svc.CreateAsync(new CreateOrderRequest(
+                Cart(latte.Id, 1), 999m,       // discount > subtotal
+                new List<PaymentInput> { new("Cash", 200m) })));
+        Assert.Contains("maximum allowed", ex.Message);
 
-        // After clamping, discount = subtotal, tax = 0, total = 0
-        Assert.Equal(140m, receipt.DiscountAmount); // clamped to subtotal
-        Assert.Equal(0m, receipt.TotalAmount);
+        // Nothing is persisted when the order is rejected.
+        var verify = t.NewContext();
+        Assert.Empty(verify.Transactions);
     }
 
     // ── Refund null path ──────────────────────────────────────────────────────

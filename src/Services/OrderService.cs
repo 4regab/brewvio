@@ -29,6 +29,7 @@ public class OrderService(BrewvioDbContext db, CurrentUser current, AuditService
         var subtotal = BuildLineItems(req.Items, menuItems, mods, lineItems, usage);
 
         subtotal = Math.Round(subtotal, 2);
+        await ValidateDiscountAsync(subtotal, req.DiscountAmount, ct);
         Discount discount = new FixedAmountDiscount(req.DiscountAmount);
         var discountAmount = discount.Apply(subtotal);
         // VAT-inclusive pricing: menu prices already include tax, so the tax is the portion
@@ -52,7 +53,8 @@ public class OrderService(BrewvioDbContext db, CurrentUser current, AuditService
         if (cashApplied > 0 || payRows.Count == 0) payRows.Add(new Payment { Method = "Cash", Amount = cashApplied });
         var method = gcashTendered > 0 ? "GCash" : "Cash";
 
-        // Deduct recipe ingredients and collect low/negative-stock warnings.
+        // Deduct recipe ingredients (rejecting the order if stock can't cover it) and collect
+        // low-stock warnings.
         var tx = new Transaction
         {
             Timestamp = DateTime.UtcNow, Subtotal = subtotal, DiscountAmount = discountAmount,
@@ -71,7 +73,8 @@ public class OrderService(BrewvioDbContext db, CurrentUser current, AuditService
     // Applies ingredient deductions and commits the order, retrying on optimistic-concurrency
     // conflicts. Each attempt re-reads the conflicting ingredients' current stock and re-applies the
     // deduction on top of it, so two concurrent orders can never overwrite each other's deduction.
-    // Returns the low/negative-stock warnings computed from the committed stock levels.
+    // Returns the low-stock warnings computed from the committed stock levels. Throws
+    // InsufficientStockException (without persisting anything) if any ingredient is short.
     private async Task<List<string>> PersistWithStockAsync(Dictionary<int, decimal> usage, CancellationToken ct = default)
     {
         const int maxAttempts = 5;
@@ -81,11 +84,22 @@ public class OrderService(BrewvioDbContext db, CurrentUser current, AuditService
             List<Ingredient> ings = usage.Count > 0
                 ? await db.Ingredients.Where(i => usage.Keys.Contains(i.Id)).ToListAsync(ct)
                 : new List<Ingredient>();
+
+            // Never sell into negative stock. If any ingredient can't cover the order's usage,
+            // reject the whole order before deducting anything so it stays consistent. This runs
+            // against freshly-read stock on every retry, so it's safe under concurrent orders.
+            var shortages = ings
+                .Where(i => i.StockLevel < usage[i.Id])
+                .Select(i => $"{i.Name} (need {usage[i.Id]} {i.Unit}, have {i.StockLevel} {i.Unit})")
+                .ToList();
+            if (shortages.Count > 0)
+                throw new InsufficientStockException(
+                    "Not enough stock to complete this order: " + string.Join("; ", shortages) + ".");
+
             foreach (var ing in ings)
             {
                 ing.StockLevel -= usage[ing.Id];
-                if (ing.StockLevel < 0) warnings.Add($"{ing.Name} is now negative ({ing.StockLevel} {ing.Unit}).");
-                else if (ing.StockLevel <= ing.Threshold) warnings.Add($"{ing.Name} is low ({ing.StockLevel} {ing.Unit}).");
+                if (ing.StockLevel <= ing.Threshold) warnings.Add($"{ing.Name} is low ({ing.StockLevel} {ing.Unit}).");
             }
 
             try
@@ -156,6 +170,7 @@ public class OrderService(BrewvioDbContext db, CurrentUser current, AuditService
         var usage = new Dictionary<int, decimal>();
         var subtotal = BuildLineItems(req.Items, menuItems, mods, lineItems, usage);
         subtotal = Math.Round(subtotal, 2);
+        await ValidateDiscountAsync(subtotal, req.DiscountAmount, ct);
         Discount discount = new FixedAmountDiscount(req.DiscountAmount);
         var discountAmount = discount.Apply(subtotal);
 
@@ -177,6 +192,10 @@ public class OrderService(BrewvioDbContext db, CurrentUser current, AuditService
     {
         var tx = await db.Transactions.Include(t => t.Items).FirstOrDefaultAsync(t => t.Id == id && t.Status == "Draft", ct);
         if (tx is null) throw new InvalidOperationException($"Draft #{id} not found.");
+
+        // Re-check the cap at the point money changes hands: a draft saved before the cap
+        // existed (or under an older limit) must not be confirmable above the current cap.
+        await ValidateDiscountAsync(tx.Subtotal, tx.DiscountAmount, ct);
 
         var taxRate = await settings.GetTaxRateAsync(ct);
         var payments = req.Payments ?? new List<PaymentInput>();
@@ -294,6 +313,21 @@ public class OrderService(BrewvioDbContext db, CurrentUser current, AuditService
         if (tx is null) return null;
         var name = CashierDisplayName(tx.Cashier);
         return ToReceipt(tx, name, tx.TotalAmount, 0, new List<string>());
+    }
+
+    // Enforces the configurable maximum discount (percent of subtotal). Rejects orders whose
+    // requested discount would exceed the cap — primarily to stop the discount being used to
+    // zero out an order ("free order" fraud). The small epsilon mirrors the payment tolerance
+    // elsewhere so floating rounding at the boundary doesn't spuriously reject a valid discount.
+    private async Task ValidateDiscountAsync(decimal subtotal, decimal discountAmount, CancellationToken ct)
+    {
+        if (discountAmount <= 0m) return;   // negative/zero is already clamped to 0 by the discount
+        var maxPercent = await settings.GetMaxDiscountPercentAsync(ct);
+        var maxDiscount = Math.Round(subtotal * maxPercent / 100m, 2);
+        if (discountAmount > maxDiscount + 0.005m)
+            throw new ArgumentException(
+                $"Discount of {discountAmount:0.00} exceeds the maximum allowed " +
+                $"({maxPercent:0.##}% of the subtotal = {maxDiscount:0.00}).");
     }
 
     // Validates each cart item, builds its TransactionItem line, accumulates ingredient usage,

@@ -807,6 +807,32 @@ a:hover { color: var(--brew-blue-d); }
   color: var(--brew-ink);
 }
 
+/* Out-of-stock tiles â€” dimmed, non-interactive, with an overlay badge */
+.menu-tile.is-unavailable {
+  opacity: .55;
+  filter: grayscale(0.7);
+  cursor: not-allowed;
+}
+.menu-tile.is-unavailable:hover {
+  box-shadow: none;
+  border-color: var(--brew-border);
+  transform: none;
+}
+.menu-tile.is-unavailable .menu-tile-photo img { opacity: .7; }
+.menu-tile-oos {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(255, 255, 255, .35);
+  font-family: 'Inter', sans-serif; font-weight: 700; font-size: .72rem;
+  letter-spacing: .03em; text-transform: uppercase;
+  color: #b42318;
+}
+.menu-tile-oos::before {
+  content: '';
+  position: absolute; inset: 0;
+  background: repeating-linear-gradient(45deg, transparent, transparent 8px, rgba(180,35,24,.08) 8px, rgba(180,35,24,.08) 16px);
+}
+
 /* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
    CART PANEL â€” right side, white bg, thin border, 20px radius
    Header: receipt icon + "Order Number: #XXX" + edit pencil

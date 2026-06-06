@@ -36,6 +36,34 @@ public class MenuServiceTests(SharedTestDb fixture) : IClassFixture<SharedTestDb
     }
 
     [Fact]
+    public async Task List_marks_item_unavailable_when_a_recipe_ingredient_is_out_of_stock()
+    {
+        using var t = fixture.Begin();
+        await DatabaseInitializer.SeedAllOriginalAsync(t.Db);
+        var svc = Build(t);
+        // Drain milk so Caffe Latte (uses 200ml milk) can't be made.
+        var milk = t.Db.Ingredients.First(i => i.Name == "Whole Milk");
+        milk.StockLevel = 0m;
+        await t.Db.SaveChangesAsync();
+
+        var latte = (await svc.ListAsync()).First(m => m.Name == "Caffe Latte");
+
+        Assert.False(latte.Available);
+    }
+
+    [Fact]
+    public async Task List_marks_item_available_when_all_ingredients_have_enough_stock()
+    {
+        using var t = fixture.Begin();
+        await DatabaseInitializer.SeedAllOriginalAsync(t.Db);
+        var svc = Build(t);
+
+        var latte = (await svc.ListAsync()).First(m => m.Name == "Caffe Latte");
+
+        Assert.True(latte.Available);
+    }
+
+    [Fact]
     public async Task Create_persists_item_with_recipe_and_cost()
     {
         using var t = fixture.Begin();

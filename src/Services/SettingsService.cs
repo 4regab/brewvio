@@ -9,7 +9,15 @@ namespace Brewvio.Services;
 public class SettingsService(BrewvioDbContext db, AuditService audit)
 {
     private const string StoreName = "StoreName", Address = "Address",
-        Currency = "Currency", TaxRate = "TaxRatePercent";
+        Currency = "Currency", TaxRate = "TaxRatePercent", MaxDiscountPct = "MaxDiscountPercent";
+
+    // Upper bound on the discount a single order may receive, as a percent of its subtotal.
+    // Stored as an optional AppSetting key ("MaxDiscountPercent"); when absent this secure
+    // default applies. It deliberately caps below 100% so a discount can never zero out an
+    // order (the "free order" fraud vector), while still allowing statutory (20%) and generous
+    // promotional discounts. Ops can override it by inserting/updating the setting key — it is
+    // intentionally NOT part of StoreSettingsDto so the store-settings save flow can't reset it.
+    internal const decimal DefaultMaxDiscountPercent = 50m;
 
     public async Task<StoreSettingsDto> GetAsync(CancellationToken ct = default)
     {
@@ -75,6 +83,16 @@ public class SettingsService(BrewvioDbContext db, AuditService audit)
     {
         _cachedTaxRate = null;
         _taxRateCachedAt = DateTime.MinValue;
+    }
+
+    // Maximum discount allowed on an order, as a percent of subtotal. Reads the optional
+    // "MaxDiscountPercent" setting key, clamped to [0, 100], falling back to the secure default
+    // when unset or unparseable. Cheap single-key lookup; not cached (orders aren't hot enough
+    // to need it, and avoiding a static cache keeps tests isolated).
+    public async Task<decimal> GetMaxDiscountPercentAsync(CancellationToken ct = default)
+    {
+        var val = (await db.Settings.FindAsync([MaxDiscountPct], ct))?.Value;
+        return decimal.TryParse(val, out var p) ? Math.Clamp(p, 0m, 100m) : DefaultMaxDiscountPercent;
     }
 
     // "USB backup" adapted to the web stack: a downloadable JSON snapshot of core tables.

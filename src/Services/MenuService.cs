@@ -111,6 +111,9 @@ public class MenuService(BrewvioDbContext db, AuditService audit)
         var recipe = m.Recipe.Select(ri =>
             new RecipeLineDto(ri.IngredientId, ri.Ingredient?.Name ?? "", ri.Ingredient?.Unit ?? "", ri.Quantity)).ToList();
         var cost = m.Recipe.Sum(ri => ri.Quantity * (ri.Ingredient?.CostPerUnit ?? 0));
-        return new MenuItemDto(m.Id, m.Name, m.Category, m.Price, m.IsActive, Math.Round(cost, 2), recipe);
+        // Available when every recipe ingredient has enough stock to make at least one unit.
+        // Items with no recipe are always available.
+        var available = m.Recipe.All(ri => ri.Ingredient is not null && ri.Ingredient.StockLevel >= ri.Quantity);
+        return new MenuItemDto(m.Id, m.Name, m.Category, m.Price, m.IsActive, Math.Round(cost, 2), recipe, available);
     }
 }

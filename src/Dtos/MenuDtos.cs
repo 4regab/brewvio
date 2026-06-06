@@ -5,7 +5,7 @@ namespace Brewvio.Dtos;
 // ----- Menu items & recipes -----
 public record RecipeLineDto(int IngredientId, string IngredientName, string Unit, decimal Quantity);
 public record MenuItemDto(int Id, string Name, string Category, decimal Price, bool IsActive,
-    decimal Cost, IReadOnlyList<RecipeLineDto> Recipe);
+    decimal Cost, IReadOnlyList<RecipeLineDto> Recipe, bool Available);
 
 public record RecipeLineInput([property: JsonRequired] int IngredientId, [property: JsonRequired] decimal Quantity);
 public record MenuItemRequest(string Name, string Category, [property: JsonRequired] decimal Price, [property: JsonRequired] bool IsActive,

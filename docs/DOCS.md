@@ -329,6 +329,8 @@ Public. Rate limit: 5/10 min per IP.
 
 Creates a **Pending** account — a Manager must approve it before the user can sign in.
 
+> Self-service sign-ups are **always created as `Cashier`** regardless of the `role` field in the request (the field is accepted for backward compatibility but ignored). Manager accounts are created by an existing Manager via `POST /api/users`, or by promoting an approved user via `PUT /api/users/{id}`.
+
 **Request**
 ```json
 { "username": "newuser", "fullName": "New User", "password": "P@ssword1", "role": "Cashier" }
@@ -392,7 +394,9 @@ Place a new order. Validates items, applies discount and tax, deducts stock, ret
 
 **Response `200`** — `ReceiptDto` (see [DTOs → Orders](#dtos--orders))
 
-**Response `400`** — empty cart, inactive item, zero/negative quantity, insufficient payment.
+**Response `400`** — empty cart, inactive item, zero/negative quantity, insufficient payment, or a discount that exceeds the maximum allowed.
+
+> **Discount cap.** `discountAmount` may not exceed a configurable percentage of the subtotal (default **50%**), which prevents a discount from zeroing out an order. The limit is read from the optional `MaxDiscountPercent` setting key (clamped to 0–100); when unset, the 50% default applies. It is intentionally **not** part of the store-settings save payload so a normal settings update can't reset it — change it by upserting the `MaxDiscountPercent` row in `AppSettings`. The cap is enforced on order creation, draft save, and draft confirmation.
 
 ---
 
@@ -538,6 +542,8 @@ Downloads order history as an XLSX spreadsheet.
 #### `GET /api/menu?includeInactive=false`
 
 Authenticated. Returns active menu items with recipe and computed cost. Pass `includeInactive=true` to include soft-deleted items.
+
+Each item includes an `available` flag: `true` when every recipe ingredient has enough stock to make at least one unit, otherwise `false` (the POS greys out and disables unavailable items). Items with no recipe are always available.
 
 **Response `200`** — array of `MenuItemDto`
 
@@ -1095,8 +1101,11 @@ All scripts use `defer` so they download in parallel while HTML parses. `manage.
 | Mutation | Cache busted |
 |---|---|
 | Save/toggle menu item or modifier | `/api/menu` |
-| Adjust or save inventory item | `/api/inventory` |
-| Place an order (stock deducted) | `/api/inventory` |
+| Adjust or save inventory item | `/api/inventory`, `/api/menu` |
+| Place an order (stock deducted) | `/api/inventory`, `/api/menu` |
+| Refund an order (stock restored) | `/api/inventory`, `/api/menu` |
+
+`/api/menu` is busted alongside stock changes because each menu item now reports an `available` flag derived from its recipe ingredients' current stock.
 
 Regular `Api.get()` bypasses the cache and is used for order queues, reports, and other real-time data.
 

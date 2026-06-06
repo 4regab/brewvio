@@ -157,7 +157,6 @@ const UI = (() => {
   // Page-level toolbar: title on the left, actions on the right.
   // viewToolbar('Title', actionEl, actionEl, ...) or viewToolbar({ title, subtitle }, ...actions).
   function viewToolbar(arg, ...actions) {
-    const opts = typeof arg === 'string' ? { title: arg } : (arg || {});
     // Title is now shown in the topbar — just render action buttons
     const right = el('div', { class: 'view-toolbar-actions' }, ...actions);
     return el('div', { class: 'view-toolbar' }, right);

@@ -107,6 +107,44 @@ Resources:
         OriginAccessControlOriginType: s3
         SigningBehavior: always
         SigningProtocol: sigv4
+  SecurityHeadersPolicy:
+    Type: AWS::CloudFront::ResponseHeadersPolicy
+    Properties:
+      ResponseHeadersPolicyConfig:
+        Name:
+          Fn::Sub: ${AWS::StackName}-security-headers
+        Comment: 'Standard security headers for all responses. CSP is Report-Only so it
+          cannot break the SPA; promote it to an enforcing Content-Security-Policy once the
+          violation reports are clean.'
+        SecurityHeadersConfig:
+          ContentTypeOptions:
+            Override: true
+          FrameOptions:
+            FrameOption: DENY
+            Override: true
+          ReferrerPolicy:
+            ReferrerPolicy: strict-origin-when-cross-origin
+            Override: true
+          StrictTransportSecurity:
+            AccessControlMaxAgeSec: 63072000
+            IncludeSubdomains: true
+            Preload: false
+            Override: true
+        CustomHeadersConfig:
+          Items:
+          - Header: Permissions-Policy
+            Value: geolocation=(), camera=(), microphone=(), payment=()
+            Override: true
+          # Report-only: the SPA loads Bootstrap/Chart.js from jsDelivr and fonts from Google,
+          # and uses inline style attributes (style-src 'unsafe-inline') but no inline scripts.
+          # Verify reports are clean, then move this to an enforcing Content-Security-Policy.
+          - Header: Content-Security-Policy-Report-Only
+            Value: "default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src
+              'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com;
+              font-src 'self' https://fonts.gstatic.com https://cdn.jsdelivr.net; img-src
+              'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self';
+              frame-ancestors 'none'"
+            Override: true
   Distribution:
     Type: AWS::CloudFront::Distribution
     Properties:
@@ -136,6 +174,8 @@ Resources:
           - HEAD
           - OPTIONS
           CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6
+          ResponseHeadersPolicyId:
+            Ref: SecurityHeadersPolicy
         CacheBehaviors:
         - PathPattern: /api/*
           TargetOriginId: api
@@ -150,6 +190,8 @@ Resources:
           - DELETE
           CachePolicyId: 4135ea2d-6df8-44a3-9df3-4b5a84be39ad
           OriginRequestPolicyId: b689b0a8-53d0-40ab-baf2-68738e2966ac
+          ResponseHeadersPolicyId:
+            Ref: SecurityHeadersPolicy
   FrontendBucketPolicy:
     Type: AWS::S3::BucketPolicy
     Properties:
