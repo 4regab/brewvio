@@ -34,11 +34,14 @@ public class ReportingService(BrewvioDbContext db)
             .Where(m => menuIdsInRange.Contains(m.Id))
             .ToDictionaryAsync(m => m.Id, m => m.Category, ct);
 
-        // Cost per menu item = sum(ingredient.CostPerUnit * recipe.Quantity). The GroupBy
-        // aggregation translates to SQL and pulls Ingredient.CostPerUnit via the join EF emits
-        // for r.Ingredient — no Include needed (Include is ignored under a GroupBy projection).
+        // Cost per menu item = sum(ingredient.CostPerUnit * recipe.Quantity). EF can't translate
+        // this grouped aggregate to SQL, so it evaluates the Sum in memory — which means the
+        // Ingredient navigation MUST be eagerly loaded (.Include), otherwise r.Ingredient is null
+        // on a fresh per-request context and the Sum throws NullReferenceException. (The Include is
+        // NOT dead: it's only "ignored" when a query translates to SQL, which this one does not.)
         var recipeCosts = await db.RecipeIngredients
             .Where(r => menuIdsInRange.Contains(r.MenuItemId))
+            .Include(r => r.Ingredient)
             .GroupBy(r => r.MenuItemId)
             .ToDictionaryAsync(
                 g => g.Key,

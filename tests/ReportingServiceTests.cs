@@ -72,6 +72,35 @@ public class ReportingServiceTests(SharedTestDb fixture) : IClassFixture<SharedT
     }
 
     [Fact]
+    public async Task Report_computes_costs_on_a_fresh_context_without_tracked_ingredients()
+    {
+        // Regression: ReportingService computes recipe cost via an in-memory Sum over
+        // r.Ingredient.CostPerUnit, so the Ingredient navigation must be eagerly loaded.
+        // The other tests run GenerateAsync on the SAME context that seeded the data, so EF
+        // relationship-fixup populates r.Ingredient and masks a missing Include. Production uses
+        // a fresh per-request context (no fixup) — exactly what NewContext() reproduces here.
+        using var t = fixture.Begin();
+        await DatabaseInitializer.SeedAllOriginalAsync(t.Db);
+        SettingsService.ResetTaxRateCache();
+        var orders = BuildOrders(t);
+        var latte = t.Db.MenuItems.First(m => m.Name == "Caffe Latte");
+
+        var r = await orders.CreateAsync(new CreateOrderRequest(
+            new List<CartItemInput> { new(latte.Id, 1, new List<int>(), null) }, 0m,
+            new List<PaymentInput> { new("Cash", 200m) }));
+        await orders.AdvanceStatusAsync(r.TransactionId); // → Completed
+
+        // Fresh context: Ingredients are NOT tracked, so a missing Include would NRE here.
+        await using var fresh = t.NewContext();
+        var report = await new ReportingService(fresh).GenerateAsync(
+            DateTime.UtcNow.Date, DateTime.UtcNow.Date.AddDays(1));
+
+        var latteRow = Assert.Single(report.MenuPerformance, m => m.Name == "Caffe Latte");
+        Assert.Equal(1, latteRow.QuantitySold);
+        Assert.True(latteRow.Profit > 0, "recipe cost should be computed (Ingredient loaded), giving a positive profit");
+    }
+
+    [Fact]
     public async Task Report_period_buckets_trend_by_month()
     {
         using var t = fixture.Begin();
