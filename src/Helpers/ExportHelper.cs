@@ -99,12 +99,21 @@ public static class ExportHelper
         return ms.ToArray();
     }
 
-    public static byte[] SalesReportXlsx(ReportDto r)
+    public static byte[] SalesReportXlsx(ReportDto r, DateTime fromUtc, DateTime toUtc)
     {
         using var wb = new XLWorkbook();
 
         // ── Sheet 1: Summary ──────────────────────────────────────────────
         var sum = wb.Worksheets.Add("Summary");
+
+        // Report title + the period it covers (toUtc is exclusive, so show the inclusive last day).
+        sum.Cell(1, 1).Value = "Sales & Analytics Report";
+        sum.Cell(1, 1).Style.Font.Bold = true;
+        sum.Cell(1, 1).Style.Font.FontSize = 14;
+        sum.Cell(2, 1).Value = $"Period: {fromUtc:yyyy-MM-dd} to {toUtc.AddDays(-1):yyyy-MM-dd}";
+        sum.Cell(3, 1).Value = $"Generated: {DateTime.UtcNow:yyyy-MM-dd HH:mm} UTC";
+
+        const int headerRow = 5;   // leave a blank row (4) between the title block and the table
         var summaryRows = new[]
         {
             ("Total Sales",         r.Summary.TotalSales.ToString("N2")),
@@ -114,14 +123,14 @@ public static class ExportHelper
             ("Total Discounts",     r.Summary.TotalDiscounts.ToString("N2")),
             ("Total Tax",           r.Summary.TotalTax.ToString("N2")),
         };
-        sum.Cell(1, 1).Value = "Metric";   sum.Cell(1, 1).Style.Font.Bold = true;
-        sum.Cell(1, 2).Value = "Value";    sum.Cell(1, 2).Style.Font.Bold = true;
+        sum.Cell(headerRow, 1).Value = "Metric";   sum.Cell(headerRow, 1).Style.Font.Bold = true;
+        sum.Cell(headerRow, 2).Value = "Value";    sum.Cell(headerRow, 2).Style.Font.Bold = true;
         for (var i = 0; i < summaryRows.Length; i++)
         {
-            sum.Cell(i + 2, 1).Value = summaryRows[i].Item1;
-            sum.Cell(i + 2, 2).Value = summaryRows[i].Item2;
+            sum.Cell(headerRow + 1 + i, 1).Value = summaryRows[i].Item1;
+            sum.Cell(headerRow + 1 + i, 2).Value = summaryRows[i].Item2;
         }
-        sum.Column(1).Width = 24;
+        sum.Column(1).Width = 28;
         sum.Column(2).Width = 18;
 
         // ── Sheet 2: Revenue Trend ────────────────────────────────────────
