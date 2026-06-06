@@ -594,9 +594,65 @@ a:hover { color: var(--brew-blue-d); }
   overflow: hidden;
 }
 @media (max-width: 767px) {
-  .pos-layout { grid-template-columns: 1fr; height: auto; }
-  .topbar.pos-active { position: sticky; width: 100%; }
-  .pos-left { padding-top: 1.25rem; height: auto; overflow: visible; }
+  /* Single-column layout — menu fills viewport, cart is a bottom sheet */
+  .pos-layout {
+    grid-template-columns: 1fr;
+    height: auto;
+    min-height: 100dvh;
+  }
+
+  /* Topbar spans full width on mobile (no side cart panel) */
+  .topbar.pos-active {
+    position: sticky;
+    width: 100%;
+  }
+
+  /* Left column scrolls naturally */
+  .pos-left {
+    padding-top: calc(var(--topbar-h) + .5rem);
+    padding-bottom: calc(90px + env(safe-area-inset-bottom, 0px));
+    height: auto;
+    overflow: visible;
+  }
+
+  /* ── Cart bottom sheet ───────────────────────────────── */
+  .cart-panel {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    height: 85dvh;
+    border-radius: 20px 20px 0 0;
+    border-left: none;
+    border-top: 1px solid var(--brew-border);
+    box-shadow: 0 -8px 40px rgba(0,0,0,.14);
+    transform: translateY(100%);
+    transition: transform .3s cubic-bezier(.4,0,.2,1);
+    z-index: 1050;
+    /* ensure it sits above page content */
+    will-change: transform;
+  }
+  .cart-panel.cart-open {
+    transform: translateY(0);
+  }
+
+  /* Scrim behind bottom sheet */
+  .cart-scrim {
+    display: none;
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,.25);
+    backdrop-filter: blur(2px);
+    z-index: 1049;
+  }
+  .cart-scrim.cart-open { display: block; }
+
+  /* Mobile cart close button (×) shown in header */
+  .cart-mobile-close {
+    display: flex !important;
+  }
+
+  /* ── Floating cart FAB ───────────────────────────────── */
+  .cart-fab {
+    display: flex !important;
+  }
 }
 
 .pos-left {
@@ -615,19 +671,6 @@ a:hover { color: var(--brew-blue-d); }
   align-items: stretch;
   flex: 1; min-height: 0;
 }
-@media (max-width: 900px) {
-  .pos-menu-row { grid-template-columns: 1fr; }
-  /* Switch vertical category rail to horizontal scrolling strip */
-  .cat-rail {
-    flex-direction: row;
-    overflow-x: auto;
-    overflow-y: hidden;
-    padding-bottom: 4px;
-    padding-right: 0;
-    gap: .5rem;
-  }
-  .cat-rail .cat-tab { min-width: 72px; flex-shrink: 0; padding: .45rem .3rem; }
-}
 
 /* Right column: search bar pinned at top, then scrolling product grid */
 .pos-menu-col {
@@ -644,6 +687,22 @@ a:hover { color: var(--brew-blue-d); }
 .cat-rail::-webkit-scrollbar { width: 4px; }
 .cat-rail::-webkit-scrollbar-thumb { background: var(--brew-border); border-radius: 2px; }
 
+/* Switch category rail to horizontal scroll on tablet/mobile */
+@media (max-width: 900px) {
+  .pos-menu-row { grid-template-columns: 1fr; }
+  .cat-rail {
+    flex-direction: row;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding-bottom: 4px;
+    padding-right: 0;
+    gap: .5rem;
+    scrollbar-width: none;
+  }
+  .cat-rail::-webkit-scrollbar { display: none; }
+  .cat-rail .cat-tab { min-width: 80px; width: auto; flex-shrink: 0; padding: .5rem .35rem; }
+}
+
 /* Menu grid scrolls independently too */
 .menu-grid-wrap { overflow-y: auto; min-height: 0; padding-right: 4px; }
 .cat-rail .cat-tab {
@@ -653,7 +712,11 @@ a:hover { color: var(--brew-blue-d); }
   cursor: pointer; font-family: 'Inter', sans-serif;
   color: var(--brew-muted); transition: all .15s;
   display: flex; flex-direction: column; align-items: center; gap: .1rem;
-  width: 100%; text-align: center;
+  text-align: center;
+  /* width: 100% only on desktop vertical rail — overridden to auto in horizontal mode */
+}
+@media (min-width: 901px) {
+  .cat-rail .cat-tab { width: 100%; }
 }
 .cat-rail .cat-tab .cat-icon {
   width: 28px; height: 28px; border-radius: 50%;
@@ -687,15 +750,14 @@ a:hover { color: var(--brew-blue-d); }
   color: var(--brew-muted-l); font-size: .95rem; pointer-events: none;
 }
 
-/* Menu grid â€” adapts to available space alongside vertical category rail */
+/* Menu grid â€” density-based so tiles stay compact and pack more per row instead of
+   stretching to fill 3-4 fixed columns. minmax floor keeps 2-up on phones. */
 .menu-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 1rem;
+  grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+  gap: .6rem;
 }
-@media (min-width: 1500px) { .menu-grid { grid-template-columns: repeat(4, 1fr); } }
-@media (max-width: 1100px) { .menu-grid { grid-template-columns: repeat(2, 1fr); } }
-@media (max-width: 700px)  { .menu-grid { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 480px) { .menu-grid { grid-template-columns: repeat(2, 1fr); gap: .5rem; } }
 
 .menu-tile {
   background: var(--brew-surface);
@@ -716,24 +778,24 @@ a:hover { color: var(--brew-blue-d); }
 
 /* Product image â€” pure white bg, product centered, compact aspect ratio */
 .menu-tile-photo {
-  width: 100%; aspect-ratio: 5 / 3;
+  width: 100%; aspect-ratio: 16 / 10;
   background: #ffffff;
   display: flex; align-items: center; justify-content: center;
   overflow: hidden;
   position: relative;
 }
 .menu-tile-photo img {
-  max-width: 60%; max-height: 80%; object-fit: contain; display: block;
+  max-width: 72%; max-height: 82%; object-fit: contain; display: block;
 }
-.menu-tile-body { padding: .75rem .85rem .85rem; }
+.menu-tile-body { padding: .55rem .65rem .65rem; }
 .menu-tile .name {
-  font-family: 'Inter', sans-serif; font-weight: 600; font-size: .82rem;
-  line-height: 1.25; color: var(--brew-ink); margin-bottom: .3rem;
+  font-family: 'Inter', sans-serif; font-weight: 600; font-size: .78rem;
+  line-height: 1.2; color: var(--brew-ink); margin-bottom: .2rem;
 }
 /* Category pill â€” overlaid top-left of the photo */
 
 .menu-tile .price {
-  font-family: 'Inter', sans-serif; font-weight: 700; font-size: .9rem;
+  font-family: 'Inter', sans-serif; font-weight: 700; font-size: .85rem;
   color: var(--brew-ink);
 }
 
@@ -745,14 +807,19 @@ a:hover { color: var(--brew-blue-d); }
    Footer: Place Order (blue button)
 â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 .cart-panel {
-  position: sticky; top: 0;
   background: var(--brew-surface);
   border-left: 1px solid var(--brew-border);
   display: flex; flex-direction: column;
-  height: 100dvh;
   overflow: hidden; color: var(--brew-ink);
   border-top-left-radius: 0;
   border-bottom-left-radius: 0;
+}
+/* Desktop: sticky side panel */
+@media (min-width: 768px) {
+  .cart-panel {
+    position: sticky; top: 0;
+    height: 100dvh;
+  }
 }
 
 .cart-header {
@@ -1458,11 +1525,14 @@ tr.low-stock { background: #fef3c7 !important; }
 â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 
 /* Topbar only covers left column width, positioned absolutely so cart can reach top */
-.topbar.pos-active {
-  position: absolute;
-  top: 0; left: 0;
-  width: calc(100% - 340px);
-  z-index: 1030;
+/* Desktop only — on mobile the topbar is full-width sticky */
+@media (min-width: 768px) {
+  .topbar.pos-active {
+    position: absolute;
+    top: 0; left: 0;
+    width: calc(100% - 340px);
+    z-index: 1030;
+  }
 }
 
 /* Hide the default plain date while POS is active */
@@ -1505,3 +1575,150 @@ tr.low-stock { background: #fef3c7 !important; }
   white-space: nowrap;
 }
 .pos-tb-clock i { font-size: .78rem; color: var(--brew-muted-l); }
+
+/* ══════════════════════════════════════════════════════════
+   MOBILE OPTIMIZATIONS
+   Applied on top of existing styles for ≤767px.
+   Zero design changes — same palette, same components.
+══════════════════════════════════════════════════════════ */
+
+/* ── Floating cart FAB (mobile only) ────────────────────── */
+.cart-fab {
+  display: none; /* shown via media query */
+  position: fixed;
+  bottom: calc(1.25rem + env(safe-area-inset-bottom, 0px));
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1048;
+  align-items: center;
+  gap: .6rem;
+  background: var(--brew-espresso);
+  color: #fff;
+  border: none;
+  border-radius: var(--r-pill);
+  padding: .75rem 1.5rem;
+  font-family: 'Inter', sans-serif;
+  font-weight: 700;
+  font-size: .9rem;
+  box-shadow: 0 4px 20px rgba(90,61,33,.35);
+  cursor: pointer;
+  transition: background .15s, box-shadow .15s, transform .1s;
+  white-space: nowrap;
+  min-height: 52px;
+  /* keep above everything except the cart sheet itself */
+}
+.cart-fab:active { transform: translateX(-50%) scale(.97); }
+.cart-fab:hover  { background: var(--brew-espresso-d); }
+
+/* Badge on the FAB */
+.cart-fab-badge {
+  background: #fff;
+  color: var(--brew-espresso);
+  border-radius: 999px;
+  font-size: .72rem;
+  font-weight: 700;
+  min-width: 20px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 5px;
+}
+
+/* Cart close button — hidden on desktop, shown on mobile */
+.cart-mobile-close {
+  display: none;
+  background: var(--brew-surface);
+  border: 1px solid var(--brew-border);
+  border-radius: 50%;
+  width: 32px; height: 32px;
+  align-items: center; justify-content: center;
+  cursor: pointer;
+  color: var(--brew-muted);
+  font-size: 1.1rem;
+  flex-shrink: 0;
+  transition: background .12s, color .12s;
+}
+.cart-mobile-close:hover { background: var(--brew-danger-l); color: var(--brew-danger); }
+
+/* ── Touch target enforcement (WCAG 2.5.5 — 44×44px min) ── */
+@media (max-width: 767px) {
+  /* Qty stepper buttons */
+  .qty-stepper button {
+    width: 36px;
+    height: 36px;
+  }
+  .qty-stepper {
+    height: 36px;
+  }
+
+  /* Category tabs — horizontal strip, compact but tappable */
+  .cat-rail .cat-tab {
+    min-height: 60px;
+    padding: .5rem .5rem;
+  }
+
+  /* Menu tiles — slightly larger tap area via padding */
+  .menu-tile-body {
+    padding: .85rem .9rem 1rem;
+  }
+
+  /* Topbar hamburger */
+  #nav-toggle {
+    width: 40px;
+    height: 40px;
+  }
+
+  /* Place Order button — full width, larger on mobile */
+  .cart-actions .btn-complete {
+    padding: 1.1rem;
+    font-size: 1rem;
+  }
+
+  /* Cart line thumbnail — slightly larger on mobile */
+  .cart-line-thumb {
+    width: 52px; height: 52px;
+  }
+
+  /* Topbar date/time — hide clock pill on mobile to save space, keep date */
+  .pos-tb-sep,
+  .pos-tb-clock {
+    display: none;
+  }
+
+  /* Keep the date text, slightly smaller */
+  .pos-tb-date {
+    font-size: .78rem;
+  }
+
+  /* Discount + payment method row — stack on very narrow screens */
+  .cart-actions .checkout-row {
+    grid-template-columns: 1fr 1fr;
+    gap: .4rem;
+  }
+}
+
+/* ── Extra-small screens (< 390px) ─────────────────────── */
+@media (max-width: 389px) {
+  .cart-actions .checkout-row {
+    grid-template-columns: 1fr;
+  }
+  .pos-tb-date { display: none; }
+}
+
+/* ── Tablet (768px–900px) tweaks ────────────────────────── */
+@media (min-width: 768px) and (max-width: 900px) {
+  .pos-layout {
+    grid-template-columns: 1fr 300px;
+  }
+  .topbar.pos-active {
+    width: calc(100% - 300px);
+  }
+  .cart-panel {
+    /* ensure FAB and scrim are never shown at tablet */
+    position: sticky;
+    transform: none !important;
+    border-radius: 0;
+    height: 100dvh;
+  }
+}

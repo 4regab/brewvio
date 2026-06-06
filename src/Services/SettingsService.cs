@@ -11,9 +11,9 @@ public class SettingsService(BrewvioDbContext db, AuditService audit)
     private const string StoreName = "StoreName", Address = "Address",
         Currency = "Currency", TaxRate = "TaxRatePercent";
 
-    public async Task<StoreSettingsDto> GetAsync()
+    public async Task<StoreSettingsDto> GetAsync(CancellationToken ct = default)
     {
-        var map = await db.Settings.ToDictionaryAsync(s => s.Key, s => s.Value);
+        var map = await db.Settings.ToDictionaryAsync(s => s.Key, s => s.Value, ct);
         return new StoreSettingsDto(
             map.GetValueOrDefault(StoreName, "Chao & Brew"),
             map.GetValueOrDefault(Address, ""),
@@ -23,11 +23,11 @@ public class SettingsService(BrewvioDbContext db, AuditService audit)
 
     // skill: optimizing-ef-core-queries — replaced 4 sequential FindAsync calls (one per key)
     // with a single WHERE ... IN query, then upsert in memory before one SaveChangesAsync.
-    public async Task<StoreSettingsDto> UpdateAsync(StoreSettingsDto dto)
+    public async Task<StoreSettingsDto> UpdateAsync(StoreSettingsDto dto, CancellationToken ct = default)
     {
         var keys = new[] { StoreName, Address, Currency, TaxRate };
         var existing = await db.Settings.Where(s => keys.Contains(s.Key))
-            .ToDictionaryAsync(s => s.Key);
+            .ToDictionaryAsync(s => s.Key, ct);
 
         void Upsert(string key, string value)
         {
@@ -40,7 +40,7 @@ public class SettingsService(BrewvioDbContext db, AuditService audit)
         Upsert(Currency, dto.Currency);
         Upsert(TaxRate, dto.TaxRatePercent.ToString("0.####"));
         audit.Add("SettingsUpdated", $"Store='{dto.StoreName}', Tax={dto.TaxRatePercent}%, Currency={dto.Currency}");
-        await db.SaveChangesAsync();
+        await db.SaveChangesAsync(ct);
         return dto;
     }
 
@@ -54,11 +54,11 @@ public class SettingsService(BrewvioDbContext db, AuditService audit)
     // transaction-isolated DB value. Always true in production.
     internal static bool TaxRateCacheEnabled { get; set; } = true;
 
-    public async Task<decimal> GetTaxRateAsync()
+    public async Task<decimal> GetTaxRateAsync(CancellationToken ct = default)
     {
         if (TaxRateCacheEnabled && _cachedTaxRate.HasValue && (DateTime.UtcNow - _taxRateCachedAt).TotalMinutes < 5)
             return _cachedTaxRate.Value;
-        var val = (await db.Settings.FindAsync(TaxRate))?.Value;
+        var val = (await db.Settings.FindAsync([TaxRate], ct))?.Value;
         var rate = decimal.TryParse(val, out var t) ? t : 0m;
         if (TaxRateCacheEnabled) SetTaxRateCache(rate);
         return rate;
@@ -80,19 +80,19 @@ public class SettingsService(BrewvioDbContext db, AuditService audit)
     // "USB backup" adapted to the web stack: a downloadable JSON snapshot of core tables.
     // Users are projected explicitly (Id/Username/FullName/Role/IsActive) to avoid leaking PasswordHash.
     // Transactions are projected to avoid circular reference via Cashier navigation property.
-    public async Task<object> ExportBackupAsync() => new
+    public async Task<object> ExportBackupAsync(CancellationToken ct = default) => new
     {
         exportedAt = DateTime.UtcNow,
-        users = await db.Users.Select(u => new { u.Id, u.Username, u.FullName, u.Role, u.IsActive }).ToListAsync(),
+        users = await db.Users.AsNoTracking().Select(u => new { u.Id, u.Username, u.FullName, u.Role, u.IsActive }).ToListAsync(ct),
         ingredients = await db.Ingredients.AsNoTracking()
-            .Select(i => new { i.Id, i.Code, i.Name, i.Category, i.Unit, i.StockLevel, i.Threshold, i.CostPerUnit }).ToListAsync(),
+            .Select(i => new { i.Id, i.Code, i.Name, i.Category, i.Unit, i.StockLevel, i.Threshold, i.CostPerUnit }).ToListAsync(ct),
         menuItems = await db.MenuItems.AsNoTracking()
             .Include(m => m.Recipe).ThenInclude(r => r.Ingredient)
             .Select(m => new {
                 m.Id, m.Name, m.Category, m.Price, m.IsActive, m.ImageUrl,
                 Recipe = m.Recipe.Select(r => new { r.IngredientId, r.Quantity, IngredientName = r.Ingredient.Name })
-            }).ToListAsync(),
-        modifiers = await db.Modifiers.AsNoTracking().ToListAsync(),
+            }).ToListAsync(ct),
+        modifiers = await db.Modifiers.AsNoTracking().ToListAsync(ct),
         transactions = await db.Transactions.AsNoTracking()
             .Include(t => t.Items)
             .Include(t => t.Payments)
@@ -101,8 +101,8 @@ public class SettingsService(BrewvioDbContext db, AuditService audit)
                 t.PaymentMethod, t.CashierId, t.Status, t.Notes,
                 Items = t.Items.Select(i => new { i.Id, i.ItemName, i.Quantity, i.UnitPrice, i.LineTotal, i.Modifiers }),
                 Payments = t.Payments.Select(p => new { p.Id, p.Method, p.Amount })
-            }).ToListAsync(),
-        auditLogs = await db.AuditLogs.AsNoTracking().ToListAsync(),
-        settings = await db.Settings.AsNoTracking().ToListAsync()
+            }).ToListAsync(ct),
+        auditLogs = await db.AuditLogs.AsNoTracking().ToListAsync(ct),
+        settings = await db.Settings.AsNoTracking().ToListAsync(ct)
     };
 }

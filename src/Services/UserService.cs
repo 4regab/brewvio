@@ -9,48 +9,48 @@ namespace Brewvio.Services;
 // User administration — create / update / deactivate accounts and reset passwords (Manager only).
 public class UserService(BrewvioDbContext db, AuditService audit)
 {
-    public async Task<List<UserDto>> ListAsync() =>
+    public async Task<List<UserDto>> ListAsync(CancellationToken ct = default) =>
         await db.Users.AsNoTracking().OrderBy(u => u.Username)
-            .Select(u => new UserDto(u.Id, u.Username, u.FullName, u.Role, u.IsActive, u.Status, u.CreatedAt)).ToListAsync();
+            .Select(u => new UserDto(u.Id, u.Username, u.FullName, u.Role, u.IsActive, u.Status, u.CreatedAt)).ToListAsync(ct);
 
     // Pending sign-ups awaiting a Manager decision (registration/approval workflow).
-    public async Task<List<PendingUserDto>> ListPendingAsync() =>
+    public async Task<List<PendingUserDto>> ListPendingAsync(CancellationToken ct = default) =>
         await db.Users.AsNoTracking().Where(u => u.Status == UserStatus.Pending).OrderBy(u => u.CreatedAt)
-            .Select(u => new PendingUserDto(u.Id, u.Username, u.FullName, u.Role, u.CreatedAt)).ToListAsync();
+            .Select(u => new PendingUserDto(u.Id, u.Username, u.FullName, u.Role, u.CreatedAt)).ToListAsync(ct);
 
     // Approve a pending account -> Active + can sign in.
-    public async Task<UserDto?> ApproveAsync(int id)
+    public async Task<UserDto?> ApproveAsync(int id, CancellationToken ct = default)
     {
-        var user = await db.Users.FindAsync(id);
+        var user = await db.Users.FindAsync([id], ct);
         if (user is null) return null;
         if (user.Status != UserStatus.Pending)
             throw new InvalidOperationException("Only pending accounts can be approved.");
         user.Status = UserStatus.Active;
         user.IsActive = true;
         audit.Add("UserApproved", $"{user.Username} ({user.Role}) approved and activated.");
-        await db.SaveChangesAsync();
+        await db.SaveChangesAsync(ct);
         return new UserDto(user.Id, user.Username, user.FullName, user.Role, user.IsActive, user.Status, user.CreatedAt);
     }
 
     // Reject a pending account -> Rejected + cannot sign in.
-    public async Task<UserDto?> RejectAsync(int id)
+    public async Task<UserDto?> RejectAsync(int id, CancellationToken ct = default)
     {
-        var user = await db.Users.FindAsync(id);
+        var user = await db.Users.FindAsync([id], ct);
         if (user is null) return null;
         if (user.Status != UserStatus.Pending)
             throw new InvalidOperationException("Only pending accounts can be rejected.");
         user.Status = UserStatus.Rejected;
         user.IsActive = false;
         audit.Add("UserRejected", $"{user.Username} ({user.Role}) request declined.");
-        await db.SaveChangesAsync();
+        await db.SaveChangesAsync(ct);
         return new UserDto(user.Id, user.Username, user.FullName, user.Role, user.IsActive, user.Status, user.CreatedAt);
     }
 
-    public async Task<UserDto> CreateAsync(CreateUserRequest r)
+    public async Task<UserDto> CreateAsync(CreateUserRequest r, CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(r.Username) || string.IsNullOrWhiteSpace(r.Password))
             throw new ArgumentException("Username and password are required.");
-        if (await db.Users.AnyAsync(u => u.Username == r.Username))
+        if (await db.Users.AnyAsync(u => u.Username == r.Username, ct))
             throw new InvalidOperationException("Username already exists.");
 
         var role = r.Role == Roles.Manager ? Roles.Manager : Roles.Cashier;
@@ -62,13 +62,13 @@ public class UserService(BrewvioDbContext db, AuditService audit)
         };
         db.Users.Add(user);
         audit.Add("UserCreated", $"{r.Username} ({role})");
-        await db.SaveChangesAsync();
+        await db.SaveChangesAsync(ct);
         return new UserDto(user.Id, user.Username, user.FullName, user.Role, user.IsActive, user.Status, user.CreatedAt);
     }
 
-    public async Task<UserDto?> UpdateAsync(int id, UpdateUserRequest r)
+    public async Task<UserDto?> UpdateAsync(int id, UpdateUserRequest r, CancellationToken ct = default)
     {
-        var user = await db.Users.FindAsync(id);
+        var user = await db.Users.FindAsync([id], ct);
         if (user is null) return null;
         user.FullName = r.FullName;
         user.Role = r.Role == Roles.Manager ? Roles.Manager : Roles.Cashier;
@@ -77,32 +77,32 @@ public class UserService(BrewvioDbContext db, AuditService audit)
         if (user.Status == UserStatus.Active || user.Status == UserStatus.Rejected)
             user.Status = r.IsActive ? UserStatus.Active : UserStatus.Rejected;
         audit.Add("UserUpdated", $"{user.Username}: role {user.Role}, active={user.IsActive}");
-        await db.SaveChangesAsync();
+        await db.SaveChangesAsync(ct);
         return new UserDto(user.Id, user.Username, user.FullName, user.Role, user.IsActive, user.Status, user.CreatedAt);
     }
 
-    public async Task<bool> ResetPasswordAsync(int id, string newPassword)
+    public async Task<bool> ResetPasswordAsync(int id, string newPassword, CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(newPassword) || newPassword.Length < 8)
             throw new ArgumentException("Password must be at least 8 characters.");
-        var user = await db.Users.FindAsync(id);
+        var user = await db.Users.FindAsync([id], ct);
         if (user is null) return false;
         user.PasswordHash = PasswordHasher.Hash(newPassword);
         audit.Add("PasswordReset", $"Password reset for {user.Username}");
-        await db.SaveChangesAsync();
+        await db.SaveChangesAsync(ct);
         return true;
     }
 
-    public async Task<bool> DeleteAsync(int id)
+    public async Task<bool> DeleteAsync(int id, CancellationToken ct = default)
     {
-        var user = await db.Users.FindAsync(id);
+        var user = await db.Users.FindAsync([id], ct);
         if (user is null) return false;
         // Prevent deleting if user has transactions (integrity)
-        if (await db.Transactions.AnyAsync(t => t.CashierId == id))
+        if (await db.Transactions.AnyAsync(t => t.CashierId == id, ct))
             throw new InvalidOperationException("Cannot delete a user with existing transactions. Deactivate instead.");
         audit.Add("UserDeleted", $"{user.Username} ({user.Role}) deleted.");
         db.Users.Remove(user);
-        await db.SaveChangesAsync();
+        await db.SaveChangesAsync(ct);
         return true;
     }
 }

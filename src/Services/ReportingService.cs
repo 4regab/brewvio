@@ -10,30 +10,39 @@ namespace Brewvio.Services;
 // done in memory after targeted queries (provider-agnostic).
 public class ReportingService(BrewvioDbContext db)
 {
-    public async Task<ReportDto> GenerateAsync(DateTime fromUtc, DateTime toUtc, string period = "daily")
+    public async Task<ReportDto> GenerateAsync(DateTime fromUtc, DateTime toUtc, string period = "daily",
+        CancellationToken ct = default)
     {
         period = (period ?? "daily").Trim().ToLowerInvariant();
 
         var txns = await db.Transactions
             .Where(t => t.Status == "Completed" && t.Timestamp >= fromUtc && t.Timestamp < toUtc)
             .Select(t => new { t.Timestamp, t.DiscountAmount, t.TaxAmount, t.TotalAmount })
-            .ToListAsync();
+            .ToListAsync(ct);
 
         var items = await db.TransactionItems
             .Where(ti => ti.Transaction.Status == "Completed"
                 && ti.Transaction.Timestamp >= fromUtc && ti.Transaction.Timestamp < toUtc)
             .Select(ti => new { ti.MenuItemId, ti.ItemName, ti.Quantity, ti.LineTotal })
-            .ToListAsync();
+            .ToListAsync(ct);
 
-        var category = await db.MenuItems.ToDictionaryAsync(m => m.Id, m => m.Category);
+        // Only the menu items actually sold in this range are needed for category lookup and
+        // costing — scope both queries to those ids instead of scanning every menu item / recipe.
+        var menuIdsInRange = items.Select(i => i.MenuItemId).Distinct().ToList();
 
-        // Cost per menu item = sum(ingredient.CostPerUnit * recipe.Quantity)
+        var category = await db.MenuItems.AsNoTracking()
+            .Where(m => menuIdsInRange.Contains(m.Id))
+            .ToDictionaryAsync(m => m.Id, m => m.Category, ct);
+
+        // Cost per menu item = sum(ingredient.CostPerUnit * recipe.Quantity). The GroupBy
+        // aggregation translates to SQL and pulls Ingredient.CostPerUnit via the join EF emits
+        // for r.Ingredient — no Include needed (Include is ignored under a GroupBy projection).
         var recipeCosts = await db.RecipeIngredients
-            .Include(r => r.Ingredient)
+            .Where(r => menuIdsInRange.Contains(r.MenuItemId))
             .GroupBy(r => r.MenuItemId)
             .ToDictionaryAsync(
                 g => g.Key,
-                g => g.Sum(r => r.Quantity * r.Ingredient.CostPerUnit));
+                g => g.Sum(r => r.Quantity * r.Ingredient.CostPerUnit), ct);
 
         var totalSales    = txns.Sum(t => t.TotalAmount);
         var totalTax      = txns.Sum(t => t.TaxAmount);

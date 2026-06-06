@@ -8,22 +8,22 @@ namespace Brewvio.Services;
 // Menu & recipe management plus modifiers. Recipe cost is derived from ingredient unit costs.
 public class MenuService(BrewvioDbContext db, AuditService audit)
 {
-    public async Task<List<MenuItemDto>> ListAsync(bool includeInactive = false)
+    public async Task<List<MenuItemDto>> ListAsync(bool includeInactive = false, CancellationToken ct = default)
     {
         var q = db.MenuItems.AsNoTracking().Include(m => m.Recipe).ThenInclude(r => r.Ingredient).AsQueryable();
         if (!includeInactive) q = q.Where(m => m.IsActive);
-        var items = await q.OrderBy(m => m.Category).ThenBy(m => m.Name).ToListAsync();
+        var items = await q.OrderBy(m => m.Category).ThenBy(m => m.Name).ToListAsync(ct);
         return items.Select(ToDto).ToList();
     }
 
-    public async Task<MenuItemDto?> GetAsync(int id)
+    public async Task<MenuItemDto?> GetAsync(int id, CancellationToken ct = default)
     {
         var m = await db.MenuItems.Include(x => x.Recipe).ThenInclude(r => r.Ingredient)
-            .FirstOrDefaultAsync(x => x.Id == id);
+            .FirstOrDefaultAsync(x => x.Id == id, ct);
         return m is null ? null : ToDto(m);
     }
 
-    public async Task<MenuItemDto?> CreateAsync(MenuItemRequest r)
+    public async Task<MenuItemDto?> CreateAsync(MenuItemRequest r, CancellationToken ct = default)
     {
         var item = new MenuItem
         {
@@ -32,77 +32,77 @@ public class MenuService(BrewvioDbContext db, AuditService audit)
         };
         db.MenuItems.Add(item);
         audit.Add("MenuItemCreated", $"{r.Name} @ {r.Price} ({r.Recipe.Count} recipe line(s))");
-        await db.SaveChangesAsync();
-        return await GetAsync(item.Id);
+        await db.SaveChangesAsync(ct);
+        return await GetAsync(item.Id, ct);
     }
 
-    public async Task<MenuItemDto?> UpdateAsync(int id, MenuItemRequest r)
+    public async Task<MenuItemDto?> UpdateAsync(int id, MenuItemRequest r, CancellationToken ct = default)
     {
-        var item = await db.MenuItems.Include(m => m.Recipe).FirstOrDefaultAsync(m => m.Id == id);
+        var item = await db.MenuItems.Include(m => m.Recipe).FirstOrDefaultAsync(m => m.Id == id, ct);
         if (item is null) return null;
         item.Name = r.Name; item.Category = r.Category; item.Price = r.Price; item.IsActive = r.IsActive;
         db.RecipeIngredients.RemoveRange(item.Recipe);
         item.Recipe = r.Recipe.Select(l => new RecipeIngredient { IngredientId = l.IngredientId, Quantity = l.Quantity }).ToList();
         audit.Add("MenuItemUpdated", $"{r.Name} @ {r.Price}");
-        await db.SaveChangesAsync();
-        return await GetAsync(id);
+        await db.SaveChangesAsync(ct);
+        return await GetAsync(id, ct);
     }
 
-    public async Task<bool> SetActiveAsync(int id, bool active)
+    public async Task<bool> SetActiveAsync(int id, bool active, CancellationToken ct = default)
     {
-        var item = await db.MenuItems.FindAsync(id);
+        var item = await db.MenuItems.FindAsync([id], ct);
         if (item is null) return false;
         item.IsActive = active;
         audit.Add("MenuItemStatus", $"{item.Name} set {(active ? "active" : "inactive")}");
-        await db.SaveChangesAsync();
+        await db.SaveChangesAsync(ct);
         return true;
     }
 
-    public async Task<bool> DeleteMenuItemAsync(int id)
+    public async Task<bool> DeleteMenuItemAsync(int id, CancellationToken ct = default)
     {
-        var item = await db.MenuItems.Include(m => m.Recipe).FirstOrDefaultAsync(m => m.Id == id);
+        var item = await db.MenuItems.Include(m => m.Recipe).FirstOrDefaultAsync(m => m.Id == id, ct);
         if (item is null) return false;
         db.RecipeIngredients.RemoveRange(item.Recipe);
         db.MenuItems.Remove(item);
         audit.Add("MenuItemDeleted", $"{item.Name} permanently deleted");
-        await db.SaveChangesAsync();
+        await db.SaveChangesAsync(ct);
         return true;
     }
 
-    public async Task<bool> DeleteModifierAsync(int id)
+    public async Task<bool> DeleteModifierAsync(int id, CancellationToken ct = default)
     {
-        var m = await db.Modifiers.FindAsync(id);
+        var m = await db.Modifiers.FindAsync([id], ct);
         if (m is null) return false;
         db.Modifiers.Remove(m);
         audit.Add("ModifierDeleted", $"{m.GroupName}/{m.Name} permanently deleted");
-        await db.SaveChangesAsync();
+        await db.SaveChangesAsync(ct);
         return true;
     }
 
-    public async Task<List<ModifierDto>> ListModifiersAsync(bool includeInactive = false)
+    public async Task<List<ModifierDto>> ListModifiersAsync(bool includeInactive = false, CancellationToken ct = default)
     {
         var q = db.Modifiers.AsQueryable();
         if (!includeInactive) q = q.Where(m => m.IsActive);
         return await q.OrderBy(m => m.GroupName).ThenBy(m => m.Name)
-            .Select(m => new ModifierDto(m.Id, m.Name, m.GroupName, m.PriceDelta, m.IsActive, m.AppliesTo)).ToListAsync();
+            .Select(m => new ModifierDto(m.Id, m.Name, m.GroupName, m.PriceDelta, m.IsActive, m.AppliesTo)).ToListAsync(ct);
     }
 
-    public async Task<ModifierDto> CreateModifierAsync(ModifierRequest r)
+    public async Task<ModifierDto> CreateModifierAsync(ModifierRequest r, CancellationToken ct = default)
     {
         var m = new Modifier { Name = r.Name, GroupName = r.GroupName, PriceDelta = r.PriceDelta, IsActive = r.IsActive, AppliesTo = r.AppliesTo };
         db.Modifiers.Add(m);
         audit.Add("ModifierCreated", $"{r.GroupName}/{r.Name} ({r.PriceDelta:+0.00;-0.00;0})");
-        await db.SaveChangesAsync();
+        await db.SaveChangesAsync(ct);
         return new ModifierDto(m.Id, m.Name, m.GroupName, m.PriceDelta, m.IsActive, m.AppliesTo);
     }
 
-    public async Task<ModifierDto?> UpdateModifierAsync(int id, ModifierRequest r)
+    public async Task<ModifierDto?> UpdateModifierAsync(int id, ModifierRequest r, CancellationToken ct = default)
     {
-        var m = await db.Modifiers.FindAsync(id);
+        var m = await db.Modifiers.FindAsync([id], ct);
         if (m is null) return null;
         m.Name = r.Name; m.GroupName = r.GroupName; m.PriceDelta = r.PriceDelta; m.IsActive = r.IsActive; m.AppliesTo = r.AppliesTo;
         audit.Add("ModifierUpdated", $"{r.GroupName}/{r.Name}");
-        await db.SaveChangesAsync();
+        await db.SaveChangesAsync(ct);
         return new ModifierDto(m.Id, m.Name, m.GroupName, m.PriceDelta, m.IsActive, m.AppliesTo);
     }
 

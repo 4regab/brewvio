@@ -10,7 +10,7 @@ namespace Brewvio.Services;
 // (incl. split), deducts recipe ingredients, records the sale, and produces the receipt.
 public class OrderService(BrewvioDbContext db, CurrentUser current, AuditService audit, SettingsService settings)
 {
-    public async Task<ReceiptDto> CreateAsync(CreateOrderRequest req)
+    public async Task<ReceiptDto> CreateAsync(CreateOrderRequest req, CancellationToken ct = default)
     {
         if (req.Items is null || req.Items.Count == 0)
             throw new ArgumentException("The cart is empty.");
@@ -20,9 +20,9 @@ public class OrderService(BrewvioDbContext db, CurrentUser current, AuditService
 
         // Sequential awaits — EF Core DbContext is not thread-safe; Task.WhenAll on the same
         // context causes "second operation started before previous completed" errors.
-        var menuItems = await db.MenuItems.Include(m => m.Recipe).Where(m => menuIds.Contains(m.Id)).ToDictionaryAsync(m => m.Id);
-        var mods      = modIds.Count > 0 ? await db.Modifiers.Where(m => modIds.Contains(m.Id)).ToDictionaryAsync(m => m.Id) : new Dictionary<int, Modifier>();
-        var taxRate   = await settings.GetTaxRateAsync();
+        var menuItems = await db.MenuItems.Include(m => m.Recipe).Where(m => menuIds.Contains(m.Id)).ToDictionaryAsync(m => m.Id, ct);
+        var mods      = modIds.Count > 0 ? await db.Modifiers.Where(m => modIds.Contains(m.Id)).ToDictionaryAsync(m => m.Id, ct) : new Dictionary<int, Modifier>();
+        var taxRate   = await settings.GetTaxRateAsync(ct);
 
         var lineItems = new List<TransactionItem>();
         var usage = new Dictionary<int, decimal>();      // ingredientId -> quantity to deduct
@@ -63,7 +63,7 @@ public class OrderService(BrewvioDbContext db, CurrentUser current, AuditService
         db.Transactions.Add(tx);
         audit.Add("OrderPlaced", $"Txn total {total:0.00} via {method}; {lineItems.Count} line(s).");
 
-        var warnings = await PersistWithStockAsync(usage);
+        var warnings = await PersistWithStockAsync(usage, ct);
 
         return ToReceipt(tx, current.Username, tendered, change, warnings);
     }
@@ -72,14 +72,14 @@ public class OrderService(BrewvioDbContext db, CurrentUser current, AuditService
     // conflicts. Each attempt re-reads the conflicting ingredients' current stock and re-applies the
     // deduction on top of it, so two concurrent orders can never overwrite each other's deduction.
     // Returns the low/negative-stock warnings computed from the committed stock levels.
-    private async Task<List<string>> PersistWithStockAsync(Dictionary<int, decimal> usage)
+    private async Task<List<string>> PersistWithStockAsync(Dictionary<int, decimal> usage, CancellationToken ct = default)
     {
         const int maxAttempts = 5;
         for (var attempt = 1; attempt <= maxAttempts; attempt++)
         {
             var warnings = new List<string>();
             List<Ingredient> ings = usage.Count > 0
-                ? await db.Ingredients.Where(i => usage.Keys.Contains(i.Id)).ToListAsync()
+                ? await db.Ingredients.Where(i => usage.Keys.Contains(i.Id)).ToListAsync(ct)
                 : new List<Ingredient>();
             foreach (var ing in ings)
             {
@@ -90,7 +90,7 @@ public class OrderService(BrewvioDbContext db, CurrentUser current, AuditService
 
             try
             {
-                await db.SaveChangesAsync();
+                await db.SaveChangesAsync(ct);
                 return warnings;
             }
             catch (DbUpdateConcurrencyException ex) when (attempt < maxAttempts)
@@ -99,7 +99,7 @@ public class OrderService(BrewvioDbContext db, CurrentUser current, AuditService
                 // entries to the latest DB values (and current xmin) and loop to re-apply.
                 foreach (var entry in ex.Entries)
                 {
-                    var dbValues = await entry.GetDatabaseValuesAsync();
+                    var dbValues = await entry.GetDatabaseValuesAsync(ct);
                     if (dbValues is null) continue;            // deleted concurrently — skip re-apply
                     entry.OriginalValues.SetValues(dbValues);
                     entry.CurrentValues.SetValues(dbValues);
@@ -113,11 +113,11 @@ public class OrderService(BrewvioDbContext db, CurrentUser current, AuditService
             "The order could not be completed due to high inventory contention. Please try again.");
     }
 
-    public async Task<ReceiptDto?> RefundAsync(int id, string reason)
+    public async Task<ReceiptDto?> RefundAsync(int id, string reason, CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(reason)) throw new ArgumentException("A reason is required for a refund.");
         var tx = await db.Transactions.Include(t => t.Items).Include(t => t.Payments)
-            .FirstOrDefaultAsync(t => t.Id == id);
+            .FirstOrDefaultAsync(t => t.Id == id, ct);
         if (tx is null) return null;
         if (tx.Status != "Completed") throw new InvalidOperationException("Only completed transactions can be refunded.");
 
@@ -125,32 +125,32 @@ public class OrderService(BrewvioDbContext db, CurrentUser current, AuditService
         tx.Notes = reason;
         // Restock ingredients from the current recipes of the sold items.
         var menuIds = tx.Items.Select(i => i.MenuItemId).Distinct().ToList();
-        var recipeLines = await db.RecipeIngredients.Where(r => menuIds.Contains(r.MenuItemId)).ToListAsync();
+        var recipeLines = await db.RecipeIngredients.Where(r => menuIds.Contains(r.MenuItemId)).ToListAsync(ct);
         var ingIds = recipeLines.Select(r => r.IngredientId).Distinct().ToList();
-        var ingById = await db.Ingredients.Where(i => ingIds.Contains(i.Id)).ToDictionaryAsync(i => i.Id);
+        var ingById = await db.Ingredients.Where(i => ingIds.Contains(i.Id)).ToDictionaryAsync(i => i.Id, ct);
         foreach (var item in tx.Items)
             foreach (var rl in recipeLines.Where(r => r.MenuItemId == item.MenuItemId))
                 if (ingById.TryGetValue(rl.IngredientId, out var ing)) ing.StockLevel += rl.Quantity * item.Quantity;
 
         audit.Add("OrderRefunded", $"Txn #{tx.Id} ({tx.TotalAmount:0.00}) refunded. Reason: {reason}");
-        await db.SaveChangesAsync();
+        await db.SaveChangesAsync(ct);
         return ToReceipt(tx, current.Username, 0, 0, new List<string>());
     }
 
     // Pre-payment cancellation: only the audited reason is persisted (cart cleared client-side).
-    public Task CancelAsync(string reason) =>
-        audit.LogAsync("OrderCancelled", string.IsNullOrWhiteSpace(reason) ? "(no reason given)" : reason);
+    public Task CancelAsync(string reason, CancellationToken ct = default) =>
+        audit.LogAsync("OrderCancelled", string.IsNullOrWhiteSpace(reason) ? "(no reason given)" : reason, ct);
 
     // Saves the current cart as a Draft — no payment, no stock deduction, excluded from sales.
-    public async Task<DraftDto> SaveDraftAsync(SaveDraftRequest req)
+    public async Task<DraftDto> SaveDraftAsync(SaveDraftRequest req, CancellationToken ct = default)
     {
         if (req.Items is null || req.Items.Count == 0)
             throw new ArgumentException("The cart is empty.");
 
         var menuIds = req.Items.Select(i => i.MenuItemId).Distinct().ToList();
         var modIds = req.Items.SelectMany(i => i.ModifierIds ?? Array.Empty<int>()).Distinct().ToList();
-        var menuItems = await db.MenuItems.Include(m => m.Recipe).Where(m => menuIds.Contains(m.Id)).ToDictionaryAsync(m => m.Id);
-        var mods = modIds.Count > 0 ? await db.Modifiers.Where(m => modIds.Contains(m.Id)).ToDictionaryAsync(m => m.Id) : new Dictionary<int, Modifier>();
+        var menuItems = await db.MenuItems.Include(m => m.Recipe).Where(m => menuIds.Contains(m.Id)).ToDictionaryAsync(m => m.Id, ct);
+        var mods = modIds.Count > 0 ? await db.Modifiers.Where(m => modIds.Contains(m.Id)).ToDictionaryAsync(m => m.Id, ct) : new Dictionary<int, Modifier>();
 
         var lineItems = new List<TransactionItem>();
         var usage = new Dictionary<int, decimal>();
@@ -168,17 +168,17 @@ public class OrderService(BrewvioDbContext db, CurrentUser current, AuditService
         };
         db.Transactions.Add(tx);
         audit.Add("OrderDrafted", $"Draft saved; {lineItems.Count} item(s), discount {discountAmount:0.00}.");
-        await db.SaveChangesAsync();
+        await db.SaveChangesAsync(ct);
         return ToDraft(tx);
     }
 
     // Confirms a Draft — runs full payment/stock logic and moves it to Preparing.
-    public async Task<ReceiptDto> ConfirmDraftAsync(int id, ConfirmDraftRequest req)
+    public async Task<ReceiptDto> ConfirmDraftAsync(int id, ConfirmDraftRequest req, CancellationToken ct = default)
     {
-        var tx = await db.Transactions.Include(t => t.Items).FirstOrDefaultAsync(t => t.Id == id && t.Status == "Draft");
+        var tx = await db.Transactions.Include(t => t.Items).FirstOrDefaultAsync(t => t.Id == id && t.Status == "Draft", ct);
         if (tx is null) throw new InvalidOperationException($"Draft #{id} not found.");
 
-        var taxRate = await settings.GetTaxRateAsync();
+        var taxRate = await settings.GetTaxRateAsync(ct);
         var payments = req.Payments ?? new List<PaymentInput>();
         var cashTendered = payments.Where(p => p.Method == "Cash").Sum(p => p.Amount);
         var gcashTendered = payments.Where(p => p.Method == "GCash").Sum(p => p.Amount);
@@ -207,7 +207,7 @@ public class OrderService(BrewvioDbContext db, CurrentUser current, AuditService
 
         // Deduct stock
         var menuIds = tx.Items.Select(i => i.MenuItemId).Distinct().ToList();
-        var menuItems = await db.MenuItems.Include(m => m.Recipe).Where(m => menuIds.Contains(m.Id)).ToDictionaryAsync(m => m.Id);
+        var menuItems = await db.MenuItems.Include(m => m.Recipe).Where(m => menuIds.Contains(m.Id)).ToDictionaryAsync(m => m.Id, ct);
         var usage = new Dictionary<int, decimal>();
         foreach (var item in tx.Items)
             if (menuItems.TryGetValue(item.MenuItemId, out var mi))
@@ -215,25 +215,25 @@ public class OrderService(BrewvioDbContext db, CurrentUser current, AuditService
                     usage[ri.IngredientId] = usage.GetValueOrDefault(ri.IngredientId) + ri.Quantity * item.Quantity;
 
         audit.Add("DraftConfirmed", $"Draft #{tx.Id} confirmed; total {total:0.00} via {method}.");
-        var warnings = await PersistWithStockAsync(usage);
+        var warnings = await PersistWithStockAsync(usage, ct);
         return ToReceipt(tx, current.Username, tendered, change, warnings);
     }
 
-    public async Task<List<DraftDto>> GetDraftsAsync() =>
+    public async Task<List<DraftDto>> GetDraftsAsync(CancellationToken ct = default) =>
         (await db.Transactions.AsNoTracking()
             .Where(t => t.Status == "Draft" && t.CashierId == current.Id)
             .Include(t => t.Items)
             .OrderByDescending(t => t.Timestamp)
-            .ToListAsync())
+            .ToListAsync(ct))
         .Select(ToDraft).ToList();
 
-    public async Task DeleteDraftAsync(int id)
+    public async Task DeleteDraftAsync(int id, CancellationToken ct = default)
     {
-        var tx = await db.Transactions.Include(t => t.Items).FirstOrDefaultAsync(t => t.Id == id && t.Status == "Draft");
+        var tx = await db.Transactions.Include(t => t.Items).FirstOrDefaultAsync(t => t.Id == id && t.Status == "Draft", ct);
         if (tx is null) return;
         db.Transactions.Remove(tx);
         audit.Add("DraftDeleted", $"Draft #{id} deleted.");
-        await db.SaveChangesAsync();
+        await db.SaveChangesAsync(ct);
     }
 
     private static DraftDto ToDraft(Transaction tx)
@@ -251,31 +251,32 @@ public class OrderService(BrewvioDbContext db, CurrentUser current, AuditService
         ["Preparing"] = "Completed"
     };
 
-    public async Task<TransactionSummaryDto?> AdvanceStatusAsync(int id)
+    public async Task<TransactionSummaryDto?> AdvanceStatusAsync(int id, CancellationToken ct = default)
     {
         var tx = await db.Transactions.Include(t => t.Cashier)
-            .FirstOrDefaultAsync(t => t.Id == id);
+            .FirstOrDefaultAsync(t => t.Id == id, ct);
         if (tx is null) return null;
         if (!NextStatus.TryGetValue(tx.Status, out var next))
             throw new InvalidOperationException($"Order #{id} cannot be advanced from status '{tx.Status}'.");
 
         tx.Status = next;
         audit.Add("OrderStatusAdvanced", $"Txn #{tx.Id} moved to {next}.");
-        await db.SaveChangesAsync();
+        await db.SaveChangesAsync(ct);
 
-        var items = await db.TransactionItems.Where(ti => ti.TransactionId == id).ToListAsync();
+        var items = await db.TransactionItems.Where(ti => ti.TransactionId == id).ToListAsync(ct);
         var itemSummary = string.Join(", ", items.Select(i => i.Quantity > 1 ? $"{i.Quantity}x {i.ItemName}" : i.ItemName));
         var name = tx.Cashier.FullName != "" ? tx.Cashier.FullName : tx.Cashier.Username;
         return new TransactionSummaryDto(tx.Id, tx.Timestamp, tx.TotalAmount, tx.PaymentMethod, tx.Status, name, items.Count, itemSummary);
     }
 
-    public async Task<int> ActiveQueueCountAsync() =>
-        await db.Transactions.CountAsync(t => t.Status == "Pending" || t.Status == "Preparing");
+    public async Task<int> ActiveQueueCountAsync(CancellationToken ct = default) =>
+        await db.Transactions.CountAsync(t => t.Status == "Pending" || t.Status == "Preparing", ct);
 
-    public async Task<int> NextOrderNumberAsync() =>
-        (await db.Transactions.MaxAsync(t => (int?)t.Id) ?? 0) + 1;
+    public async Task<int> NextOrderNumberAsync(CancellationToken ct = default) =>
+        (await db.Transactions.MaxAsync(t => (int?)t.Id, ct) ?? 0) + 1;
 
-    public async Task<List<TransactionSummaryDto>> RecentAsync(int take = 50, DateTime? from = null, DateTime? to = null) =>
+    public async Task<List<TransactionSummaryDto>> RecentAsync(int take = 50, DateTime? from = null, DateTime? to = null,
+        CancellationToken ct = default) =>
         await db.Transactions.AsNoTracking()
             .Where(t => (from == null || t.Timestamp >= from) && (to == null || t.Timestamp < to))
             .OrderByDescending(t => t.Timestamp)
@@ -284,12 +285,12 @@ public class OrderService(BrewvioDbContext db, CurrentUser current, AuditService
                 t.Cashier.FullName != "" ? t.Cashier.FullName : t.Cashier.Username,
                 t.Items.Count,
                 string.Join(", ", t.Items.Select(i => i.Quantity > 1 ? i.Quantity + "x " + i.ItemName : i.ItemName))))
-            .ToListAsync();
+            .ToListAsync(ct);
 
-    public async Task<ReceiptDto?> GetReceiptAsync(int id)
+    public async Task<ReceiptDto?> GetReceiptAsync(int id, CancellationToken ct = default)
     {
         var tx = await db.Transactions.Include(t => t.Items).Include(t => t.Payments).Include(t => t.Cashier)
-            .FirstOrDefaultAsync(t => t.Id == id);
+            .FirstOrDefaultAsync(t => t.Id == id, ct);
         if (tx is null) return null;
         var name = CashierDisplayName(tx.Cashier);
         return ToReceipt(tx, name, tx.TotalAmount, 0, new List<string>());

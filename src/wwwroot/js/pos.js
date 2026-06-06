@@ -559,13 +559,76 @@ window.Views = window.Views || {};
 
       const cartOrderNumEl = el('div', { class: 'cart-header-eyebrow', text: 'Order Number: #' + nextOrderNum });
 
+      // Mobile cart close button (×) — only visible on mobile via CSS
+      const cartCloseBtn = el('button', {
+        class: 'cart-mobile-close',
+        type: 'button',
+        'aria-label': 'Close cart',
+        onClick: () => closeCart(),
+      }, el('i', { class: 'bi bi-x' }));
+
       const cartPanel = el('div', { class: 'cart-panel' },
         el('div', { class: 'cart-header' },
           el('div', { class: 'cart-header-title' },
             el('div', { class: 'cart-header-name', text: 'New Order' }),
-            cartOrderNumEl)),
+            cartOrderNumEl),
+          cartCloseBtn),
         cartItemsEl, totalsEl,
         el('div', { class: 'cart-actions' }, checkoutRow, chargeBtn, cancelBtn));
+
+      // ── Mobile cart FAB + scrim ──────────────────────────
+      const cartScrim = el('div', { class: 'cart-scrim', id: 'cart-scrim' });
+      const fabBadge  = el('span', { class: 'cart-fab-badge', text: '0' });
+      const cartFab   = el('button', {
+        class: 'cart-fab',
+        type: 'button',
+        'aria-label': 'View cart',
+        onClick: () => openCart(),
+      },
+        el('i', { class: 'bi bi-basket2-fill' }),
+        el('span', { text: 'View Cart' }),
+        fabBadge);
+
+      function openCart() {
+        cartPanel.classList.add('cart-open');
+        cartScrim.classList.add('cart-open');
+        cartFab.style.display = 'none';
+      }
+      function closeCart() {
+        cartPanel.classList.remove('cart-open');
+        cartScrim.classList.remove('cart-open');
+        // Only show FAB again if we're still on mobile
+        if (window.innerWidth <= 767) cartFab.style.display = '';
+      }
+      cartScrim.addEventListener('click', () => closeCart());
+
+      // Update FAB badge whenever cart changes — use a dedicated update function
+      function updateFabBadge() {
+        const count = cart.reduce((s, l) => s + l.quantity, 0);
+        fabBadge.textContent = count;
+      }
+
+      // Patch renderCart to also update FAB badge after each render
+      const _origRenderCart = renderCart;
+      renderCart = function () {
+        _origRenderCart();
+        if (document.body.contains(cartFab)) updateFabBadge();
+      };
+
+      document.body.appendChild(cartScrim);
+      document.body.appendChild(cartFab);
+
+      // Clean up FAB + scrim whenever we navigate away from POS
+      function posCleanupOnNav() {
+        const id = (location.hash || '#pos').slice(1);
+        if (id !== 'pos') {
+          cartScrim.remove();
+          cartFab.remove();
+          renderCart = _origRenderCart; // restore original
+          window.removeEventListener('hashchange', posCleanupOnNav);
+        }
+      }
+      window.addEventListener('hashchange', posCleanupOnNav);
 
       root.appendChild(el('div', { class: 'pos-layout' }, left, cartPanel));
       renderMenu();

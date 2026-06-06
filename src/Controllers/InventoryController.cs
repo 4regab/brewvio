@@ -13,33 +13,33 @@ namespace Brewvio.Controllers;
 public class InventoryController(InventoryService inv) : ControllerBase
 {
     [HttpGet]
-    public async Task<IActionResult> List() => Ok(await inv.ListAsync());
+    public async Task<IActionResult> List(CancellationToken ct) => Ok(await inv.ListAsync(ct));
 
     [HttpGet("low-stock")]
-    public async Task<IActionResult> LowStock() => Ok(await inv.LowStockAsync());
+    public async Task<IActionResult> LowStock(CancellationToken ct) => Ok(await inv.LowStockAsync(ct));
 
     [HttpPost]
     [Authorize(Roles = Roles.Manager)]
-    public async Task<IActionResult> Create(IngredientRequest req) => Ok(await inv.CreateAsync(req));
+    public async Task<IActionResult> Create(IngredientRequest req, CancellationToken ct) => Ok(await inv.CreateAsync(req, ct));
 
     [HttpPut("{id:int}")]
     [Authorize(Roles = Roles.Manager)]
-    public async Task<IActionResult> Update(int id, IngredientRequest req) =>
-        await inv.UpdateAsync(id, req) is { } i ? Ok(i) : NotFound();
+    public async Task<IActionResult> Update(int id, IngredientRequest req, CancellationToken ct) =>
+        await inv.UpdateAsync(id, req, ct) is { } i ? Ok(i) : NotFound();
 
     // Manual stock-take with a mandatory reason (service throws -> 400 if missing).
     [HttpPost("{id:int}/adjust")]
     [Authorize(Roles = Roles.Manager)]
-    public async Task<IActionResult> Adjust(int id, StockAdjustRequest req) =>
-        await inv.AdjustAsync(id, req) is { } i ? Ok(i) : NotFound();
+    public async Task<IActionResult> Adjust(int id, StockAdjustRequest req, CancellationToken ct) =>
+        await inv.AdjustAsync(id, req, ct) is { } i ? Ok(i) : NotFound();
 
     [HttpDelete("{id:int}")]
     [Authorize(Roles = Roles.Manager)]
-    public async Task<IActionResult> Delete(int id) =>
-        await inv.DeleteAsync(id) ? NoContent() : NotFound();
+    public async Task<IActionResult> Delete(int id, CancellationToken ct) =>
+        await inv.DeleteAsync(id, ct) ? NoContent() : NotFound();
 
     [HttpGet("export")]
     [Authorize(Roles = Roles.Manager)]
-    public async Task<IActionResult> Export() =>
-        File(ExportHelper.InventoryCsv(await inv.ListAsync()), "text/csv", "inventory.csv");
+    public async Task<IActionResult> Export(CancellationToken ct) =>
+        File(ExportHelper.InventoryCsv(await inv.ListAsync(ct)), "text/csv", "inventory.csv");
 }

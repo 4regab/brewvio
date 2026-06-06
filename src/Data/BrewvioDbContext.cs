@@ -21,6 +21,18 @@ public class BrewvioDbContext(DbContextOptions<BrewvioDbContext> options) : DbCo
         modelBuilder.Entity<User>().HasIndex(u => u.Username).IsUnique();
         modelBuilder.Entity<AppSetting>().HasKey(s => s.Key);
 
+        // Indexes for the hot read paths (reporting, order history, the POS queue, and the
+        // audit log). These columns are filtered/sorted on frequently but were previously
+        // unindexed (only the auto FK index on Transaction.CashierId existed):
+        //   • Transaction.Timestamp         — ReportingService range scans, RecentAsync ordering, exports
+        //   • Transaction (CashierId,Status) — GetDraftsAsync (WHERE CashierId = x AND Status = 'Draft')
+        //   • Transaction.Status            — ActiveQueueCountAsync / queue count
+        //   • AuditLog.Timestamp            — AuditService.ListAsync ORDER BY Timestamp DESC
+        modelBuilder.Entity<Transaction>().HasIndex(t => t.Timestamp);
+        modelBuilder.Entity<Transaction>().HasIndex(t => new { t.CashierId, t.Status });
+        modelBuilder.Entity<Transaction>().HasIndex(t => t.Status);
+        modelBuilder.Entity<AuditLog>().HasIndex(a => a.Timestamp);
+
         // Decimal precision — money: (12,2); quantities: (12,3); unit cost: (12,4).
         modelBuilder.Entity<Ingredient>(e =>
         {

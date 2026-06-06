@@ -21,14 +21,14 @@ public class AuditService(BrewvioDbContext db, CurrentUser current)
         });
 
     // Enqueues and immediately persists (for standalone events like login).
-    public async Task LogAsync(string action, string details)
+    public async Task LogAsync(string action, string details, CancellationToken ct = default)
     {
         Add(action, details);
-        await db.SaveChangesAsync();
+        await db.SaveChangesAsync(ct);
     }
 
-    public async Task<List<AuditLogDto>> ListAsync(int take = 200) =>
+    public async Task<List<AuditLogDto>> ListAsync(int take = 200, CancellationToken ct = default) =>
         await db.AuditLogs.AsNoTracking().OrderByDescending(a => a.Timestamp).Take(take)
             .Select(a => new AuditLogDto(a.Id, a.Timestamp, a.Username, a.Action, a.Details))
-            .ToListAsync();
+            .ToListAsync(ct);
 }

@@ -13,23 +13,23 @@ public class SettingsController(SettingsService settings) : ControllerBase
 {
     // Public store info (name + currency) — any authenticated user (the POS needs it).
     [HttpGet("store")]
-    public async Task<IActionResult> Store()
+    public async Task<IActionResult> Store(CancellationToken ct)
     {
-        var s = await settings.GetAsync();
+        var s = await settings.GetAsync(ct);
         return Ok(new { storeName = s.StoreName, address = s.Address, currency = s.Currency, taxRatePercent = s.TaxRatePercent });
     }
 
     [HttpGet, Authorize(Roles = Roles.Manager)]
-    public async Task<IActionResult> Get() => Ok(await settings.GetAsync());
+    public async Task<IActionResult> Get(CancellationToken ct) => Ok(await settings.GetAsync(ct));
 
     [HttpPut, Authorize(Roles = Roles.Manager)]
-    public async Task<IActionResult> Update(StoreSettingsDto dto) => Ok(await settings.UpdateAsync(dto));
+    public async Task<IActionResult> Update(StoreSettingsDto dto, CancellationToken ct) => Ok(await settings.UpdateAsync(dto, ct));
 
     // Data backup (USB-backup equivalent for the web stack): downloadable JSON snapshot.
     [HttpGet("backup"), Authorize(Roles = Roles.Manager)]
-    public async Task<IActionResult> Backup()
+    public async Task<IActionResult> Backup(CancellationToken ct)
     {
-        var data = await settings.ExportBackupAsync();
+        var data = await settings.ExportBackupAsync(ct);
         var json = JsonSerializer.SerializeToUtf8Bytes(data, new JsonSerializerOptions { WriteIndented = true });
         return File(json, "application/json", $"brewvio-backup-{DateTime.UtcNow:yyyyMMdd-HHmm}.json");
     }

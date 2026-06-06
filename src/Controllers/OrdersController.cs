@@ -11,72 +11,72 @@ namespace Brewvio.Controllers;
 public class OrdersController(OrderService orders, SettingsService settings) : ControllerBase
 {
     [HttpPost]
-    public async Task<IActionResult> Create(CreateOrderRequest req) => Ok(await orders.CreateAsync(req));
+    public async Task<IActionResult> Create(CreateOrderRequest req, CancellationToken ct) => Ok(await orders.CreateAsync(req, ct));
 
     [HttpGet("recent")]
     public async Task<IActionResult> Recent([FromQuery] int take = 50, [FromQuery] DateTime? from = null,
-        [FromQuery] DateTime? to = null) =>
-        Ok(await orders.RecentAsync(take,
-            from != null ? DateTime.SpecifyKind(from.Value, DateTimeKind.Utc) : null,
+        [FromQuery] DateTime? to = null, CancellationToken ct = default) =>
+        Ok(await orders.RecentAsync(Math.Clamp(take, 1, 1000),
+            from != null ? DateTime.SpecifyKind(from.Value.Date, DateTimeKind.Utc) : null,
             // `to` is treated as an inclusive day -> add a day for an exclusive upper bound (matches reports).
-            to != null ? DateTime.SpecifyKind(to.Value.Date, DateTimeKind.Utc).AddDays(1) : null));
+            to != null ? DateTime.SpecifyKind(to.Value.Date, DateTimeKind.Utc).AddDays(1) : null, ct));
 
     [HttpGet("export")]
-    public async Task<IActionResult> Export([FromQuery] int take = 200) =>
-        File(ExportHelper.OrdersXlsx(await orders.RecentAsync(take)),
+    public async Task<IActionResult> Export([FromQuery] int take = 200, CancellationToken ct = default) =>
+        File(ExportHelper.OrdersXlsx(await orders.RecentAsync(Math.Clamp(take, 1, 1000), ct: ct)),
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             $"orders_{DateTime.UtcNow:yyyyMMdd-HHmm}.xlsx");
 
     [HttpGet("{id:int}")]
-    public async Task<IActionResult> Get(int id) => await orders.GetReceiptAsync(id) is { } r ? Ok(r) : NotFound();
+    public async Task<IActionResult> Get(int id, CancellationToken ct) => await orders.GetReceiptAsync(id, ct) is { } r ? Ok(r) : NotFound();
 
     [HttpGet("{id:int}/pdf")]
-    public async Task<IActionResult> Pdf(int id)
+    public async Task<IActionResult> Pdf(int id, CancellationToken ct)
     {
-        var r = await orders.GetReceiptAsync(id);
+        var r = await orders.GetReceiptAsync(id, ct);
         if (r is null) return NotFound();
-        var store = await settings.GetAsync();
+        var store = await settings.GetAsync(ct);
         var pdf = ExportHelper.ReceiptPdf(r, store.StoreName, store.Address, store.Currency);
         return File(pdf, "application/pdf", $"receipt_{id}.pdf");
     }
 
     [HttpPost("{id:int}/refund")]
-    public async Task<IActionResult> Refund(int id, RefundRequest req) =>
-        await orders.RefundAsync(id, req.Reason) is { } r ? Ok(r) : NotFound();
+    public async Task<IActionResult> Refund(int id, RefundRequest req, CancellationToken ct) =>
+        await orders.RefundAsync(id, req.Reason, ct) is { } r ? Ok(r) : NotFound();
 
     [HttpPost("{id:int}/advance")]
-    public async Task<IActionResult> Advance(int id) =>
-        await orders.AdvanceStatusAsync(id) is { } r ? Ok(r) : NotFound();
+    public async Task<IActionResult> Advance(int id, CancellationToken ct) =>
+        await orders.AdvanceStatusAsync(id, ct) is { } r ? Ok(r) : NotFound();
 
     [HttpGet("queue/count")]
-    public async Task<IActionResult> QueueCount() => Ok(new { count = await orders.ActiveQueueCountAsync() });
+    public async Task<IActionResult> QueueCount(CancellationToken ct) => Ok(new { count = await orders.ActiveQueueCountAsync(ct) });
 
     [HttpGet("next-number")]
-    public async Task<IActionResult> NextNumber() => Ok(new { nextId = await orders.NextOrderNumberAsync() });
+    public async Task<IActionResult> NextNumber(CancellationToken ct) => Ok(new { nextId = await orders.NextOrderNumberAsync(ct) });
 
     // Pre-payment cancellation — logs the reason for audit, clears the cart client-side.
     [HttpPost("cancel")]
-    public async Task<IActionResult> Cancel(CancelOrderRequest req)
+    public async Task<IActionResult> Cancel(CancelOrderRequest req, CancellationToken ct)
     {
-        await orders.CancelAsync(req.Reason);
+        await orders.CancelAsync(req.Reason, ct);
         return NoContent();
     }
 
     // Draft order — save cart without payment or stock deduction.
     [HttpPost("draft")]
-    public async Task<IActionResult> SaveDraft(SaveDraftRequest req) => Ok(await orders.SaveDraftAsync(req));
+    public async Task<IActionResult> SaveDraft(SaveDraftRequest req, CancellationToken ct) => Ok(await orders.SaveDraftAsync(req, ct));
 
     [HttpGet("drafts")]
-    public async Task<IActionResult> GetDrafts() => Ok(await orders.GetDraftsAsync());
+    public async Task<IActionResult> GetDrafts(CancellationToken ct) => Ok(await orders.GetDraftsAsync(ct));
 
     [HttpPost("{id:int}/confirm")]
-    public async Task<IActionResult> ConfirmDraft(int id, ConfirmDraftRequest req) =>
-        Ok(await orders.ConfirmDraftAsync(id, req));
+    public async Task<IActionResult> ConfirmDraft(int id, ConfirmDraftRequest req, CancellationToken ct) =>
+        Ok(await orders.ConfirmDraftAsync(id, req, ct));
 
     [HttpDelete("{id:int}/draft")]
-    public async Task<IActionResult> DeleteDraft(int id)
+    public async Task<IActionResult> DeleteDraft(int id, CancellationToken ct)
     {
-        await orders.DeleteDraftAsync(id);
+        await orders.DeleteDraftAsync(id, ct);
         return NoContent();
     }
 }

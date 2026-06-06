@@ -156,6 +156,14 @@ app.Use(async (ctx, next) =>
         ctx.Response.StatusCode = StatusCodes.Status400BadRequest;
         await ctx.Response.WriteAsJsonAsync(new { message = ex.Message, correlationId });
     }
+    catch (OperationCanceledException ex) when (ctx.RequestAborted.IsCancellationRequested)
+    {
+        // The client disconnected / timed out and the CancellationToken tripped mid-request.
+        // This is not a server fault, so log it quietly and don't try to write a response body
+        // (the socket is already gone) — avoids spurious 500s tripping CloudWatch error alarms.
+        logger.LogInformation(ex, "Request aborted by client on {Method} {Path}",
+            ctx.Request.Method, ctx.Request.Path.Value);
+    }
     catch (Exception ex)
     {
         // Unexpected errors -> 500, logged at Error so they trip CloudWatch error alarms; the

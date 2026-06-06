@@ -13,18 +13,18 @@ public class ReportsController(ReportingService reports, SettingsService setting
 {
     [HttpGet]
     public async Task<IActionResult> Get([FromQuery] DateTime? from, [FromQuery] DateTime? to,
-        [FromQuery] string period = "daily")
+        [FromQuery] string period = "daily", CancellationToken ct = default)
     {
         var (f, t) = Range(from, to);
-        return Ok(await reports.GenerateAsync(f, t, period));
+        return Ok(await reports.GenerateAsync(f, t, period, ct));
     }
 
     [HttpGet("export/csv")]
     public async Task<IActionResult> Csv([FromQuery] DateTime? from, [FromQuery] DateTime? to,
-        [FromQuery] string period = "daily")
+        [FromQuery] string period = "daily", CancellationToken ct = default)
     {
         var (f, t) = Range(from, to);
-        var report = await reports.GenerateAsync(f, t, period);
+        var report = await reports.GenerateAsync(f, t, period, ct);
         return File(ExportHelper.SalesReportXlsx(report, f, t),
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             $"sales_{f:yyyyMMdd}-{t.AddDays(-1):yyyyMMdd}.xlsx");
@@ -32,11 +32,11 @@ public class ReportsController(ReportingService reports, SettingsService setting
 
     [HttpGet("export/pdf")]
     public async Task<IActionResult> Pdf([FromQuery] DateTime? from, [FromQuery] DateTime? to,
-        [FromQuery] string period = "daily")
+        [FromQuery] string period = "daily", CancellationToken ct = default)
     {
         var (f, t) = Range(from, to);
-        var report = await reports.GenerateAsync(f, t, period);
-        var s = await settings.GetAsync();
+        var report = await reports.GenerateAsync(f, t, period, ct);
+        var s = await settings.GetAsync(ct);
         return File(ExportHelper.SalesReportPdf(report, s.StoreName, s.Currency, f, t),
             "application/pdf", $"sales_{f:yyyyMMdd}-{t.AddDays(-1):yyyyMMdd}.pdf");
     }

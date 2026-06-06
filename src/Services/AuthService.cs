@@ -17,9 +17,9 @@ public class AuthService(BrewvioDbContext db, IConfiguration config, AuditServic
 
     // Returns the token + user info on success, or an error message explaining why not
     // (bad credentials, awaiting approval, rejected, or deactivated).
-    public async Task<LoginOutcome> LoginAsync(string username, string password)
+    public async Task<LoginOutcome> LoginAsync(string username, string password, CancellationToken ct = default)
     {
-        var user = await db.Users.SingleOrDefaultAsync(u => u.Username == username);
+        var user = await db.Users.SingleOrDefaultAsync(u => u.Username == username, ct);
         if (user is null || !PasswordHasher.Verify(password, user.PasswordHash))
             return new LoginOutcome(null, "Invalid username or password.");
 
@@ -36,22 +36,22 @@ public class AuthService(BrewvioDbContext db, IConfiguration config, AuditServic
         if (PasswordHasher.NeedsRehash(user.PasswordHash))
         {
             user.PasswordHash = PasswordHasher.Hash(password);
-            await db.SaveChangesAsync();
+            await db.SaveChangesAsync(ct);
         }
 
         var token = IssueToken(user);
-        await audit.LogAsync("Login", $"{user.Username} ({user.Role}) signed in.");
+        await audit.LogAsync("Login", $"{user.Username} ({user.Role}) signed in.", ct);
         return new LoginOutcome(new LoginResponse(token, user.Username, user.FullName, user.Role), null);
     }
 
     // Self-service sign-up: creates a Pending account that a Manager must approve.
-    public async Task<RegisterResponse> RegisterAsync(RegisterRequest req)
+    public async Task<RegisterResponse> RegisterAsync(RegisterRequest req, CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(req.Username) || string.IsNullOrWhiteSpace(req.Password))
             throw new ArgumentException("Username and password are required.");
         if (req.Password.Length < 8)
             throw new ArgumentException("Password must be at least 8 characters.");
-        if (await db.Users.AnyAsync(u => u.Username == req.Username))
+        if (await db.Users.AnyAsync(u => u.Username == req.Username, ct))
             throw new InvalidOperationException("That username is already taken.");
 
         // A sign-up may request Manager or Cashier; it stays Pending until approved either way.
@@ -67,14 +67,15 @@ public class AuthService(BrewvioDbContext db, IConfiguration config, AuditServic
         };
         db.Users.Add(user);
         audit.Add("UserRegistered", $"{user.Username} requested a {role} account (pending approval).");
-        await db.SaveChangesAsync();
+        await db.SaveChangesAsync(ct);
         return new RegisterResponse(user.Id, user.Username, user.Status);
     }
 
     // Lets the "Authenticating…" screen poll for an approval decision (no token, no PII).
-    public async Task<AccountStatusResponse?> GetAccountStatusAsync(string username)
+    public async Task<AccountStatusResponse?> GetAccountStatusAsync(string username, CancellationToken ct = default)
     {
-        var user = await db.Users.AsNoTracking().SingleOrDefaultAsync(u => u.Username == username);        return user is null ? null : new AccountStatusResponse(user.Username, user.Status);
+        var user = await db.Users.AsNoTracking().SingleOrDefaultAsync(u => u.Username == username, ct);
+        return user is null ? null : new AccountStatusResponse(user.Username, user.Status);
     }
 
     private string IssueToken(User user)

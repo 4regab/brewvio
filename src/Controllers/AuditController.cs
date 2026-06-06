@@ -11,5 +11,7 @@ namespace Brewvio.Controllers;
 public class AuditController(AuditService audit) : ControllerBase
 {
     [HttpGet]
-    public async Task<IActionResult> List([FromQuery] int take = 200) => Ok(await audit.ListAsync(take));
+    public async Task<IActionResult> List([FromQuery] int take = 200, CancellationToken ct = default) =>
+        // Clamp caller-supplied page size to a sane range so a huge ?take= can't pull the whole table.
+        Ok(await audit.ListAsync(Math.Clamp(take, 1, 1000), ct));
 }

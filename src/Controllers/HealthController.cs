@@ -10,9 +10,9 @@ namespace Brewvio.Controllers;
 public class HealthController(BrewvioDbContext db) : ControllerBase
 {
     [HttpGet]
-    public async Task<IActionResult> Get()
+    public async Task<IActionResult> Get(CancellationToken ct)
     {
-        var dbOk = await db.Database.CanConnectAsync();
+        var dbOk = await db.Database.CanConnectAsync(ct);
         return Ok(new { status = "ok", service = "brewvio-api", database = dbOk ? "connected" : "unreachable" });
     }
 }
