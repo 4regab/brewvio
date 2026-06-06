@@ -20,7 +20,7 @@ This POS handles ordering, inventory, reporting, and staff management in a singl
 
 ---
 <img width="800" height=" 600" alt="brewio drawio" src="https://github.com/user-attachments/assets/9c3f5f18-4afd-4ed9-b7a9-1039a92cf6c2" />
-
+                 
 ## Tech stack
 
 | Layer | Technology |
@@ -143,16 +143,3 @@ New staff register from the login page (Pending status). A Manager approves them
 Full API reference, data models, service descriptions, and infrastructure details are in **[docs/DOCS.md](./docs/DOCS.md)**.
 
 ---
-
-## Team
-
-| Name | Role |
-|---|---|
-| James Gabriele N. Torzar | Lead Developer |
-| Charmie V. Frianeza | Developer & Documentation Lead |
-| Thea Zoe Paulo | Business Analyst |
-| Aldrin M. Butihen | Business Analyst |
-| Jean Yno Dagle | Business Analyst |
-| Anne Reign M. San Antonio | Designer |
-| Miguel Isaac D. Pambid | Designer |
-| Rayven M. Malaybay | Developer |
