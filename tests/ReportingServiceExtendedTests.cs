@@ -248,14 +248,14 @@ public class ReportingServiceExtendedTests(SharedTestDb fixture) : IClassFixture
         using var t = fixture.Begin();
         await DatabaseInitializer.SeedAllOriginalAsync(t.Db);
         var orders = BuildOrders(t);
-        var espresso = t.Db.MenuItems.First(m => m.Name == "Espresso"); // ₱100 + 12% = ₱112
+        var espresso = t.Db.MenuItems.First(m => m.Name == "Espresso"); // ₱100, VAT-inclusive
 
         await CompleteOrder(orders, new CreateOrderRequest(Cart(espresso.Id), 0m, new List<PaymentInput> { new("Cash", 500m) }));
 
         var report = await new ReportingService(t.Db).GenerateAsync(
             DateTime.UtcNow.Date, DateTime.UtcNow.Date.AddDays(1));
 
-        Assert.Equal(112m, report.Trend[0].Sales);
+        Assert.Equal(100m, report.Trend[0].Sales);
         Assert.Equal(report.Summary.TotalSales, report.Trend.Sum(p => p.Sales));
     }
 

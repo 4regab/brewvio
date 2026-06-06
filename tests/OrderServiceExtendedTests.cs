@@ -501,9 +501,8 @@ public class OrderServiceExtendedTests(SharedTestDb fixture) : IClassFixture<Sha
             new List<CartItemInput> { new(latte.Id, 1, new List<int>(), null) },
             0m, "Cash"));
 
-        // Derive exact total from live tax rate to avoid static-cache interference
-        var taxRate = await new SettingsService(db, new AuditService(db, TestSupport.Cur(1, "mgr", "Manager"))).GetTaxRateAsync();
-        var expectedTotal = Math.Round(draft.Subtotal * (1 + taxRate / 100m), 2);
+        // VAT-inclusive: total the customer pays == discounted subtotal (no discount here).
+        var expectedTotal = draft.Subtotal;
 
         var receipt = await svc.ConfirmDraftAsync(draft.Id,
             new ConfirmDraftRequest(new List<PaymentInput> { new("Cash", expectedTotal) }));
@@ -558,8 +557,7 @@ public class OrderServiceExtendedTests(SharedTestDb fixture) : IClassFixture<Sha
             new List<CartItemInput> { new(espresso.Id, 1, new List<int>(), null) },
             0m, "GCash"));
 
-        var taxRate = await new SettingsService(db, new AuditService(db, TestSupport.Cur(1, "mgr", "Manager"))).GetTaxRateAsync();
-        var total = Math.Round(draft.Subtotal * (1 + taxRate / 100m), 2);
+        var total = draft.Subtotal;   // VAT-inclusive: total == discounted subtotal
 
         var receipt = await svc.ConfirmDraftAsync(draft.Id,
             new ConfirmDraftRequest(new List<PaymentInput> { new("GCash", total) }));
@@ -580,8 +578,7 @@ public class OrderServiceExtendedTests(SharedTestDb fixture) : IClassFixture<Sha
             new List<CartItemInput> { new(espresso.Id, 1, new List<int>(), null) },
             0m, "Cash"));
 
-        var taxRate = await new SettingsService(db, new AuditService(db, TestSupport.Cur(1, "mgr", "Manager"))).GetTaxRateAsync();
-        var total = Math.Round(draft.Subtotal * (1 + taxRate / 100m), 2);
+        var total = draft.Subtotal;   // VAT-inclusive: total == discounted subtotal
         var overpay = total + 50m;
 
         var receipt = await svc.ConfirmDraftAsync(draft.Id,

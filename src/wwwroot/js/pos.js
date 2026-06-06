@@ -698,11 +698,15 @@ window.Views = window.Views || {};
                     method = m;
                     Array.from(seg.children).forEach((b) => b.className = 'btn ' + (b.dataset.method === m ? 'btn-primary' : 'btn-outline-secondary'));
                     cashLabel.textContent = m === 'GCash' ? 'GCash amount' : 'Cash tendered';
+                    cashIn.value = t.toFixed(2);
                   };
-                  [{ key: 'Cash', label: 'Cash' }, { key: 'GCash', label: 'GCash' }].forEach((m) =>
+                  [
+                    { key: 'Cash', label: '<i class="bi bi-cash-coin"></i> Cash' },
+                    { key: 'GCash', label: '<i class="bi bi-phone"></i> GCash' },
+                  ].forEach((m) =>
                     seg.appendChild(el('button', {
                       class: 'btn ' + (m.key === method ? 'btn-primary' : 'btn-outline-secondary'),
-                      text: m.label, dataset: { method: m.key }, onClick: () => setMethod(m.key),
+                      html: m.label, dataset: { method: m.key }, onClick: () => setMethod(m.key),
                     })));
                   const confirmBtn = button('Confirm payment', 'btn-complete btn-lg w-100', async () => {
                     const tendered = Number(cashIn.value) || 0;
@@ -717,7 +721,7 @@ window.Views = window.Views || {};
                       modalEl.addEventListener('hidden.bs.modal', () => showReceipt(receipt, true), { once: true });
                     } catch (e) { toast(e.message, 'danger'); confirmBtn.disabled = false; }
                   });
-                  modal({ title: 'Confirm Draft #' + String(d.id).padStart(3, '0'),
+                  modal({ title: 'Payment - ' + money(t),
                     body: el('div', {}, seg, el('div', { class: 'mb-2' }, cashLabel, cashIn), changeRow),
                     footer: [confirmBtn] });
                 }),

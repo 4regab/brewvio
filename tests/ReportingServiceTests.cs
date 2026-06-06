@@ -35,7 +35,7 @@ public class ReportingServiceTests(SharedTestDb fixture) : IClassFixture<SharedT
             DateTime.UtcNow.Date, DateTime.UtcNow.Date.AddDays(1));
 
         Assert.Equal(2, report.Summary.TransactionCount);
-        Assert.Equal(313.60m, report.Summary.TotalSales);
+        Assert.Equal(280m, report.Summary.TotalSales);
         Assert.Contains(report.MenuPerformance, m => m.Name == "Caffe Latte" && m.QuantitySold == 2 && m.Profit > 0);
     }
 

@@ -31,8 +31,11 @@ public class OrderService(BrewvioDbContext db, CurrentUser current, AuditService
         subtotal = Math.Round(subtotal, 2);
         Discount discount = new FixedAmountDiscount(req.DiscountAmount);
         var discountAmount = discount.Apply(subtotal);
-        var tax = Math.Round((subtotal - discountAmount) * taxRate / 100m, 2);
-        var total = subtotal - discountAmount + tax;
+        // VAT-inclusive pricing: menu prices already include tax, so the tax is the portion
+        // contained within the (discounted) subtotal — not added on top. Total = what the
+        // customer pays = discounted subtotal.
+        var tax = Math.Round((subtotal - discountAmount) * taxRate / (100m + taxRate), 2);
+        var total = subtotal - discountAmount;
 
         // Payment: a single tender (Cash or GCash). GCash settles like cash for change/accounting.
         var payments = req.Payments ?? new List<PaymentInput>();
@@ -182,8 +185,9 @@ public class OrderService(BrewvioDbContext db, CurrentUser current, AuditService
         var totalTendered = cashTendered + gcashTendered;
 
         var discountedSubtotal = tx.Subtotal - tx.DiscountAmount;
-        var tax = Math.Round(discountedSubtotal * taxRate / 100m, 2);
-        var total = discountedSubtotal + tax;
+        // VAT-inclusive: tax is contained within the discounted subtotal, total = discounted subtotal.
+        var tax = Math.Round(discountedSubtotal * taxRate / (100m + taxRate), 2);
+        var total = discountedSubtotal;
 
         if (totalTendered + 0.005m < total) throw new ArgumentException("Insufficient payment.");
         var change = Math.Round(totalTendered - total, 2);

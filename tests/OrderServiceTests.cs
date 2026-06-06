@@ -34,9 +34,9 @@ public class OrderServiceTests(SharedTestDb fixture) : IClassFixture<SharedTestD
 
         Assert.Equal("Preparing", receipt.Status);
         Assert.Equal(280m, receipt.Subtotal);
-        Assert.Equal(33.60m, receipt.TaxAmount);
-        Assert.Equal(313.60m, receipt.TotalAmount);
-        Assert.Equal(186.40m, receipt.Change);
+        Assert.Equal(30.00m, receipt.TaxAmount);
+        Assert.Equal(280m, receipt.TotalAmount);
+        Assert.Equal(220.00m, receipt.Change);
         Assert.Equal("Cash", receipt.PaymentMethod);
 
         Assert.Equal(milk0 - 400m, Stock("Whole Milk"));
@@ -57,11 +57,12 @@ public class OrderServiceTests(SharedTestDb fixture) : IClassFixture<SharedTestD
         var latte = db.MenuItems.First(m => m.Name == "Caffe Latte");
 
         // Single-tender model: orders are paid with either Cash or GCash (no split tenders).
+        // VAT-inclusive: a ₱140 latte is paid in full with ₱140 (tax is contained within).
         var receipt = await svc.CreateAsync(new CreateOrderRequest(Cart(latte.Id, 1), 0m,
-            new List<PaymentInput> { new("GCash", 156.80m) }));
+            new List<PaymentInput> { new("GCash", 140m) }));
 
         Assert.Equal("GCash", receipt.PaymentMethod);
-        Assert.Equal(156.80m, receipt.TotalAmount);
+        Assert.Equal(140m, receipt.TotalAmount);
         Assert.Equal(0m, receipt.Change);
         Assert.Single(receipt.Payments);
     }
@@ -94,8 +95,8 @@ public class OrderServiceTests(SharedTestDb fixture) : IClassFixture<SharedTestD
             new List<PaymentInput> { new("Cash", 200m) }));
 
         Assert.Equal(40m, receipt.DiscountAmount);
-        Assert.Equal(12.00m, receipt.TaxAmount);
-        Assert.Equal(112.00m, receipt.TotalAmount);
+        Assert.Equal(10.71m, receipt.TaxAmount);
+        Assert.Equal(100.00m, receipt.TotalAmount);
     }
 
     [Fact]
