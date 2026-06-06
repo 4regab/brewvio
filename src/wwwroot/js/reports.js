@@ -118,8 +118,7 @@ window.Views = window.Views || {};
             // Summary stat cards sit below the chart inside the same card
             const summaryInner = el('div', { class: 'rpt-chart-summary' },
               summaryCard('Amount', money(s.totalSales), currency()),
-              summaryCard('Avg Order Value', money(s.averageOrderValue), currency()),
-              summaryCard('Profit Margin', Number(s.profitMarginPercent || 0).toFixed(1), 'Percent (%)'));
+              summaryCard('Avg Order Value', money(s.averageOrderValue), currency()));
 
             // Metric selector dropdown for the chart
             const metricSelect = el('select', { class: 'rpt-chart-select', onChange: () => switchMetric() });
