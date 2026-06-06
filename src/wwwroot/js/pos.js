@@ -351,7 +351,7 @@ window.Views = window.Views || {};
       } catch (e) { toast(e.message, 'danger'); confirm.disabled = false; }
     });
 
-    modal({ title: 'Payment - ' + money(t.total), body: el('div', {}, seg, cashWrap, changeRow), footer: [confirm] });
+    modal({ title: 'Payment - ' + money(t.total), body: el('div', {}, seg, cashWrap, changeRow), footer: [confirm], size: 'payment' });
     recalc();
   }
 
@@ -792,7 +792,7 @@ window.Views = window.Views || {};
                   });
                   modal({ title: 'Payment - ' + money(t),
                     body: el('div', {}, seg, el('div', { class: 'mb-2' }, cashLabel, cashIn), changeRow),
-                    footer: [confirmBtn] });
+                    footer: [confirmBtn], size: 'payment' });
                 }),
                 button('Delete', 'btn-sm btn-outline-danger', async () => {
                   try { await Api.delete(`/api/orders/${d.id}/draft`); renderDrafts(); }

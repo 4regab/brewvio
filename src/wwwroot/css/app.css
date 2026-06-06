@@ -562,6 +562,14 @@ a:hover { color: var(--brew-blue-d); }
 .modal-content { border: 0; border-radius: 20px; box-shadow: 0 24px 60px rgba(0,0,0,.12); }
 .modal-header, .modal-footer { border-color: var(--brew-border); }
 .modal-title { font-family: 'Inter', sans-serif; font-weight: 700; }
+
+/* Payment modal — compact width so the simple cash/change form doesn't stretch,
+   and a chunky full-width Confirm button matching the cart's Place Order. */
+.modal-payment { max-width: 420px; }
+#app-modal-footer .btn-complete {
+  width: 100%; padding: .95rem; font-size: .95rem; letter-spacing: .01em;
+  border-radius: var(--r-btn);
+}
 .form-control, .form-select {
   border-radius: var(--r-inner); border-color: var(--brew-border);
   font-family: 'Inter', sans-serif; font-size: .875rem;
