@@ -19,7 +19,7 @@ This POS handles ordering, inventory, reporting, and staff management in a singl
 | **Staff management** | Manager/Cashier roles, self-service sign-up with manager approval, audit trail |
 
 ---
-<img width="800" height=" 600" alt="brewio drawio" src="https://github.com/user-attachments/assets/9c3f5f18-4afd-4ed9-b7a9-1039a92cf6c2" />
+<img width="800" alt="brewio drawio" src="https://github.com/user-attachments/assets/9c3f5f18-4afd-4ed9-b7a9-1039a92cf6c2" />
                  
 ## Tech stack
 
