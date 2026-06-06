@@ -84,26 +84,26 @@ public class MenuService(BrewvioDbContext db, AuditService audit)
         var q = db.Modifiers.AsQueryable();
         if (!includeInactive) q = q.Where(m => m.IsActive);
         return await q.OrderBy(m => m.GroupName).ThenBy(m => m.Name)
-            .Select(m => new ModifierDto(m.Id, m.Name, m.GroupName, m.PriceDelta, m.IsActive)).ToListAsync();
+            .Select(m => new ModifierDto(m.Id, m.Name, m.GroupName, m.PriceDelta, m.IsActive, m.AppliesTo)).ToListAsync();
     }
 
     public async Task<ModifierDto> CreateModifierAsync(ModifierRequest r)
     {
-        var m = new Modifier { Name = r.Name, GroupName = r.GroupName, PriceDelta = r.PriceDelta, IsActive = r.IsActive };
+        var m = new Modifier { Name = r.Name, GroupName = r.GroupName, PriceDelta = r.PriceDelta, IsActive = r.IsActive, AppliesTo = r.AppliesTo };
         db.Modifiers.Add(m);
         audit.Add("ModifierCreated", $"{r.GroupName}/{r.Name} ({r.PriceDelta:+0.00;-0.00;0})");
         await db.SaveChangesAsync();
-        return new ModifierDto(m.Id, m.Name, m.GroupName, m.PriceDelta, m.IsActive);
+        return new ModifierDto(m.Id, m.Name, m.GroupName, m.PriceDelta, m.IsActive, m.AppliesTo);
     }
 
     public async Task<ModifierDto?> UpdateModifierAsync(int id, ModifierRequest r)
     {
         var m = await db.Modifiers.FindAsync(id);
         if (m is null) return null;
-        m.Name = r.Name; m.GroupName = r.GroupName; m.PriceDelta = r.PriceDelta; m.IsActive = r.IsActive;
+        m.Name = r.Name; m.GroupName = r.GroupName; m.PriceDelta = r.PriceDelta; m.IsActive = r.IsActive; m.AppliesTo = r.AppliesTo;
         audit.Add("ModifierUpdated", $"{r.GroupName}/{r.Name}");
         await db.SaveChangesAsync();
-        return new ModifierDto(m.Id, m.Name, m.GroupName, m.PriceDelta, m.IsActive);
+        return new ModifierDto(m.Id, m.Name, m.GroupName, m.PriceDelta, m.IsActive, m.AppliesTo);
     }
 
     private static MenuItemDto ToDto(MenuItem m)

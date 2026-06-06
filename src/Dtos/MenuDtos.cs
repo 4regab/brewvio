@@ -12,5 +12,5 @@ public record MenuItemRequest(string Name, string Category, [property: JsonRequi
     IReadOnlyList<RecipeLineInput> Recipe);
 
 // ----- Modifiers -----
-public record ModifierDto(int Id, string Name, string GroupName, decimal PriceDelta, bool IsActive);
-public record ModifierRequest(string Name, string GroupName, [property: JsonRequired] decimal PriceDelta, [property: JsonRequired] bool IsActive);
+public record ModifierDto(int Id, string Name, string GroupName, decimal PriceDelta, bool IsActive, string? AppliesTo);
+public record ModifierRequest(string Name, string GroupName, [property: JsonRequired] decimal PriceDelta, [property: JsonRequired] bool IsActive, string? AppliesTo = null);

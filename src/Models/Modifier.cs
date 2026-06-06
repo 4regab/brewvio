@@ -8,4 +8,7 @@ public class Modifier
     public string GroupName { get; set; } = "";      // e.g., "Milk", "Syrup", "Size"
     public decimal PriceDelta { get; set; }
     public bool IsActive { get; set; } = true;
+    // Comma-separated category names this modifier applies to, e.g. "Cold Brew Coffee,Non-Coffee".
+    // Empty / null means it applies to ALL categories (global).
+    public string? AppliesTo { get; set; }
 }

@@ -117,17 +117,23 @@ window.Views = window.Views || {};
     const k = keyOf(item.id, []);
     const existing = cart.find((l) => l.key === k);
     if (existing) existing.quantity++;
-    else cart.push({ uid: seq++, key: k, menuItemId: item.id, name: item.name, price: item.price, quantity: 1, modifiers: [], img: menuImage(item) });
+    else cart.push({ uid: seq++, key: k, menuItemId: item.id, name: item.name, price: item.price, category: item.category || '', quantity: 1, modifiers: [], img: menuImage(item) });
     renderCart();
   }
 
   function customize(line) {
+    // Filter modifiers to only those that apply to this item's category.
+    // A modifier with no AppliesTo (null/empty) is global and shows for all categories.
+    const applicable = modifiers.filter((m) => {
+      if (!m.appliesTo) return true;
+      return m.appliesTo.split(',').map((s) => s.trim()).includes(line.category || '');
+    });
     const groups = {};
-    modifiers.forEach((m) => (groups[m.groupName] = groups[m.groupName] || []).push(m));
+    applicable.forEach((m) => (groups[m.groupName] = groups[m.groupName] || []).push(m));
     const chosen = new Set(line.modifiers.map((m) => m.id));
 
     // Running extra cost
-    const calcExtra = () => modifiers.filter((m) => chosen.has(m.id)).reduce((s, m) => s + m.priceDelta, 0);
+    const calcExtra = () => applicable.filter((m) => chosen.has(m.id)).reduce((s, m) => s + m.priceDelta, 0);
 
     // Summary price element
     const summaryPrice = el('span', { class: 'cust-summary-price', text: money(lineUnit(line)) });
@@ -182,7 +188,7 @@ window.Views = window.Views || {};
           updateSummary();
         }),
         button('Apply', 'btn-primary', () => {
-          line.modifiers = modifiers.filter((m) => chosen.has(m.id)).map((m) => ({ id: m.id, name: m.name, priceDelta: m.priceDelta }));
+          line.modifiers = applicable.filter((m) => chosen.has(m.id)).map((m) => ({ id: m.id, name: m.name, priceDelta: m.priceDelta }));
           line.key = keyOf(line.menuItemId, line.modifiers);
           closeModal(); renderCart();
         }),
