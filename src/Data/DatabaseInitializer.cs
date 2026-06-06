@@ -330,7 +330,7 @@ public static class DatabaseInitializer
                         ? Math.Round(subtotal * 0.10m, 2) : 0m;
                     decimal total = Math.Round(subtotal - discountAmount, 2);
 
-                    string method = rng.NextDouble() < 0.60 ? "Cash" : "Card";
+                    string method = rng.NextDouble() < 0.60 ? "Cash" : "GCash";
                     decimal cashTendered = method == "Cash"
                         ? Math.Ceiling(total / 50m) * 50m : total;
 
