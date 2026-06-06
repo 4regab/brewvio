@@ -48,13 +48,20 @@ public class SettingsService(BrewvioDbContext db, AuditService audit)
     private static decimal? _cachedTaxRate;
     private static DateTime _taxRateCachedAt = DateTime.MinValue;
 
+    // Process-global caching is correct on Lambda (warm containers reuse it across invocations)
+    // but causes cross-test contamination since tests run in parallel against a shared static.
+    // Tests flip this off (see Brewvio.Tests module initializer) so every read hits their own
+    // transaction-isolated DB value. Always true in production.
+    internal static bool TaxRateCacheEnabled { get; set; } = true;
+
     public async Task<decimal> GetTaxRateAsync()
     {
-        if (_cachedTaxRate.HasValue && (DateTime.UtcNow - _taxRateCachedAt).TotalMinutes < 5)
+        if (TaxRateCacheEnabled && _cachedTaxRate.HasValue && (DateTime.UtcNow - _taxRateCachedAt).TotalMinutes < 5)
             return _cachedTaxRate.Value;
         var val = (await db.Settings.FindAsync(TaxRate))?.Value;
-        SetTaxRateCache(decimal.TryParse(val, out var t) ? t : 0m);
-        return _cachedTaxRate!.Value;
+        var rate = decimal.TryParse(val, out var t) ? t : 0m;
+        if (TaxRateCacheEnabled) SetTaxRateCache(rate);
+        return rate;
     }
 
     private static void SetTaxRateCache(decimal rate)
