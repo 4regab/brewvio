@@ -71,17 +71,57 @@ public static class DatabaseInitializer
             new User { Username = "cashier", FullName = "Front Cashier", Role = Roles.Cashier, Status = UserStatus.Active, IsActive = true, PasswordHash = PasswordHasher.Hash("Cashier@123") });
 
         // ----- Ingredients -----
-        var rice     = new Ingredient { Code = "FOOD-01", Name = "Rice",           Category = "Food",     Unit = "serving", StockLevel = 500,   Threshold = 50,  CostPerUnit = 8m };
-        var pork     = new Ingredient { Code = "FOOD-02", Name = "Pork",           Category = "Food",     Unit = "serving", StockLevel = 200,   Threshold = 30,  CostPerUnit = 50m };
-        var chicken  = new Ingredient { Code = "FOOD-03", Name = "Chicken",        Category = "Food",     Unit = "serving", StockLevel = 200,   Threshold = 30,  CostPerUnit = 40m };
-        var egg      = new Ingredient { Code = "FOOD-04", Name = "Egg",            Category = "Food",     Unit = "pc",      StockLevel = 300,   Threshold = 50,  CostPerUnit = 8m };
-        var noodles  = new Ingredient { Code = "FOOD-05", Name = "Noodles",        Category = "Food",     Unit = "serving", StockLevel = 300,   Threshold = 50,  CostPerUnit = 15m };
-        var coffee   = new Ingredient { Code = "BVRG-01", Name = "Cold Brew Coffee",Category = "Beverage",Unit = "ml",      StockLevel = 10000, Threshold = 2000,CostPerUnit = 0.08m };
-        var milk     = new Ingredient { Code = "BVRG-02", Name = "Milk",           Category = "Beverage", Unit = "ml",      StockLevel = 10000, Threshold = 2000,CostPerUnit = 0.06m };
-        var matcha   = new Ingredient { Code = "BVRG-03", Name = "Matcha Powder",  Category = "Beverage", Unit = "g",       StockLevel = 1000,  Threshold = 200, CostPerUnit = 1.20m };
-        var syrup    = new Ingredient { Code = "BVRG-04", Name = "Flavored Syrup", Category = "Beverage", Unit = "ml",      StockLevel = 3000,  Threshold = 500, CostPerUnit = 0.10m };
-        var cup      = new Ingredient { Code = "SUPP-01", Name = "Cup",            Category = "Supplies", Unit = "pc",      StockLevel = 1000,  Threshold = 200, CostPerUnit = 3m };
-        db.Ingredients.AddRange(rice, pork, chicken, egg, noodles, coffee, milk, matcha, syrup, cup);
+        // Food
+        var rice          = new Ingredient { Code = "FOOD-01", Name = "Rice",              Category = "Food",     Unit = "cup",     StockLevel = 500,   Threshold = 50,  CostPerUnit = 8m };
+        var porkChop      = new Ingredient { Code = "FOOD-02", Name = "Breaded Pork Chop", Category = "Food",     Unit = "pc",      StockLevel = 100,   Threshold = 20,  CostPerUnit = 80m };
+        var chickenFillet = new Ingredient { Code = "FOOD-03", Name = "Chicken Fillet",    Category = "Food",     Unit = "pc",      StockLevel = 100,   Threshold = 20,  CostPerUnit = 60m };
+        var chickenPoppers= new Ingredient { Code = "FOOD-04", Name = "Chicken Poppers",   Category = "Food",     Unit = "g",       StockLevel = 3000,  Threshold = 500, CostPerUnit = 0.60m };
+        var chickenFing   = new Ingredient { Code = "FOOD-05", Name = "Chicken Fingers",   Category = "Food",     Unit = "pc",      StockLevel = 300,   Threshold = 50,  CostPerUnit = 20m };
+        var crabstick     = new Ingredient { Code = "FOOD-06", Name = "Crabstick",         Category = "Food",     Unit = "pc",      StockLevel = 300,   Threshold = 50,  CostPerUnit = 10m };
+        var spam          = new Ingredient { Code = "FOOD-07", Name = "Spam",              Category = "Food",     Unit = "slice",   StockLevel = 200,   Threshold = 30,  CostPerUnit = 20m };
+        var hungarian     = new Ingredient { Code = "FOOD-08", Name = "Hungarian Sausage", Category = "Food",     Unit = "pc",      StockLevel = 100,   Threshold = 20,  CostPerUnit = 25m };
+        var tocino        = new Ingredient { Code = "FOOD-09", Name = "Tocino",            Category = "Food",     Unit = "g",       StockLevel = 3000,  Threshold = 300, CostPerUnit = 0.40m };
+        var tapa          = new Ingredient { Code = "FOOD-10", Name = "Tapa",              Category = "Food",     Unit = "g",       StockLevel = 3000,  Threshold = 300, CostPerUnit = 0.45m };
+        var korSausage    = new Ingredient { Code = "FOOD-11", Name = "Korean Sausage",    Category = "Food",     Unit = "pc",      StockLevel = 200,   Threshold = 30,  CostPerUnit = 15m };
+        var bacon         = new Ingredient { Code = "FOOD-12", Name = "Bacon",             Category = "Food",     Unit = "pc",      StockLevel = 200,   Threshold = 30,  CostPerUnit = 18m };
+        var egg           = new Ingredient { Code = "FOOD-13", Name = "Egg",               Category = "Food",     Unit = "pc",      StockLevel = 300,   Threshold = 50,  CostPerUnit = 8m };
+        var onionSpring   = new Ingredient { Code = "FOOD-14", Name = "Spring Onion",      Category = "Food",     Unit = "pinch",   StockLevel = 100,   Threshold = 10,  CostPerUnit = 2m };
+        var noodles       = new Ingredient { Code = "FOOD-15", Name = "Noodles",           Category = "Food",     Unit = "g",       StockLevel = 5000,  Threshold = 500, CostPerUnit = 0.20m };
+        var sprouts       = new Ingredient { Code = "FOOD-16", Name = "Mung Bean Sprouts", Category = "Food",     Unit = "g",       StockLevel = 3000,  Threshold = 300, CostPerUnit = 0.05m };
+        var porkSiomai    = new Ingredient { Code = "FOOD-17", Name = "Pork Siomai",       Category = "Food",     Unit = "pc",      StockLevel = 300,   Threshold = 50,  CostPerUnit = 8m };
+        var japSiomai     = new Ingredient { Code = "FOOD-18", Name = "Japanese Siomai",   Category = "Food",     Unit = "pc",      StockLevel = 300,   Threshold = 50,  CostPerUnit = 10m };
+        // Beverages
+        var coldBrew      = new Ingredient { Code = "BVRG-01", Name = "Cold Brew Coffee",  Category = "Beverage", Unit = "ml",      StockLevel = 10000, Threshold = 2000,CostPerUnit = 0.08m };
+        var milk          = new Ingredient { Code = "BVRG-02", Name = "Milk",              Category = "Beverage", Unit = "ml",      StockLevel = 10000, Threshold = 2000,CostPerUnit = 0.06m };
+        var coldFoam      = new Ingredient { Code = "BVRG-03", Name = "Cold Foam",         Category = "Beverage", Unit = "ml",      StockLevel = 3000,  Threshold = 500, CostPerUnit = 0.15m };
+        var condensedMilk = new Ingredient { Code = "BVRG-04", Name = "Condensed Milk",    Category = "Beverage", Unit = "g",       StockLevel = 2000,  Threshold = 300, CostPerUnit = 0.30m };
+        var vanillaSyrup  = new Ingredient { Code = "BVRG-05", Name = "Vanilla Syrup",     Category = "Beverage", Unit = "ml",      StockLevel = 2000,  Threshold = 300, CostPerUnit = 0.25m };
+        var caramelDrizzle= new Ingredient { Code = "BVRG-06", Name = "Caramel Drizzle",   Category = "Beverage", Unit = "g",       StockLevel = 1000,  Threshold = 150, CostPerUnit = 0.35m };
+        var chocSauce     = new Ingredient { Code = "BVRG-07", Name = "Chocolate Sauce",   Category = "Beverage", Unit = "ml",      StockLevel = 2000,  Threshold = 300, CostPerUnit = 0.30m };
+        var sigSyrup      = new Ingredient { Code = "BVRG-08", Name = "Signature Syrup",   Category = "Beverage", Unit = "ml",      StockLevel = 2000,  Threshold = 300, CostPerUnit = 0.20m };
+        var strawJam      = new Ingredient { Code = "BVRG-09", Name = "Strawberry Jam",    Category = "Beverage", Unit = "scoop",   StockLevel = 500,   Threshold = 50,  CostPerUnit = 3m };
+        var blueJam       = new Ingredient { Code = "BVRG-10", Name = "Blueberry Jam",     Category = "Beverage", Unit = "scoop",   StockLevel = 500,   Threshold = 50,  CostPerUnit = 3m };
+        var mangoJam      = new Ingredient { Code = "BVRG-11", Name = "Mango Jam",         Category = "Beverage", Unit = "scoop",   StockLevel = 500,   Threshold = 50,  CostPerUnit = 3m };
+        var chocPowder    = new Ingredient { Code = "BVRG-12", Name = "Chocolate Powder",  Category = "Beverage", Unit = "scoop",   StockLevel = 500,   Threshold = 50,  CostPerUnit = 5m };
+        var oreo          = new Ingredient { Code = "BVRG-13", Name = "Crushed Oreo",      Category = "Beverage", Unit = "scoop",   StockLevel = 200,   Threshold = 30,  CostPerUnit = 8m };
+        var berrySyrup    = new Ingredient { Code = "BVRG-14", Name = "Berry Syrup",       Category = "Beverage", Unit = "ml",      StockLevel = 1000,  Threshold = 150, CostPerUnit = 0.25m };
+        var matchaPowder  = new Ingredient { Code = "BVRG-15", Name = "Matcha Powder",     Category = "Beverage", Unit = "scoop",   StockLevel = 500,   Threshold = 50,  CostPerUnit = 6m };
+        var frappeBase    = new Ingredient { Code = "BVRG-16", Name = "Frappe Base",       Category = "Beverage", Unit = "g",       StockLevel = 3000,  Threshold = 500, CostPerUnit = 0.30m };
+        var miloPowder    = new Ingredient { Code = "BVRG-17", Name = "Milo Powder",       Category = "Beverage", Unit = "scoop",   StockLevel = 500,   Threshold = 50,  CostPerUnit = 4m };
+        var chocChips     = new Ingredient { Code = "BVRG-18", Name = "Chocolate Chips",   Category = "Beverage", Unit = "g",       StockLevel = 500,   Threshold = 50,  CostPerUnit = 0.50m };
+        var yogurtPowder  = new Ingredient { Code = "BVRG-19", Name = "Yogurt Powder",     Category = "Beverage", Unit = "scoop",   StockLevel = 200,   Threshold = 30,  CostPerUnit = 5m };
+        var sodaBase      = new Ingredient { Code = "BVRG-20", Name = "Soda Water",        Category = "Beverage", Unit = "ml",      StockLevel = 10000, Threshold = 1000,CostPerUnit = 0.03m };
+        var fruitSyrup    = new Ingredient { Code = "BVRG-21", Name = "Fruit Soda Syrup",  Category = "Beverage", Unit = "pump",    StockLevel = 1000,  Threshold = 100, CostPerUnit = 2m };
+        var cup           = new Ingredient { Code = "SUPP-01", Name = "Cup",               Category = "Supplies", Unit = "pc",      StockLevel = 1000,  Threshold = 200, CostPerUnit = 3m };
+
+        db.Ingredients.AddRange(
+            rice, porkChop, chickenFillet, chickenPoppers, chickenFing, crabstick,
+            spam, hungarian, tocino, tapa, korSausage, bacon, egg, onionSpring,
+            noodles, sprouts, porkSiomai, japSiomai,
+            coldBrew, milk, coldFoam, condensedMilk, vanillaSyrup, caramelDrizzle,
+            chocSauce, sigSyrup, strawJam, blueJam, mangoJam, chocPowder, oreo,
+            berrySyrup, matchaPowder, frappeBase, miloPowder, chocChips, yogurtPowder,
+            sodaBase, fruitSyrup, cup);
 
         RecipeIngredient R(Ingredient i, decimal qty) => new() { Ingredient = i, Quantity = qty };
         MenuItem Item(string name, string cat, decimal price, params RecipeIngredient[] recipe) =>
@@ -89,72 +129,73 @@ public static class DatabaseInitializer
 
         db.MenuItems.AddRange(
             // ── Food ──────────────────────────────────────────────────────────
-            Item("Pork Tonkatsu",      "Food",  149m, R(pork, 1), R(rice, 1)),
-            Item("Chicken Tonkatsu",   "Food",  149m, R(chicken, 1), R(rice, 1)),
-            Item("Chicken Poppers",    "Food",  109m, R(chicken, 1)),
-            Item("Chicken Fingers",    "Food",  129m, R(chicken, 1)),
-            Item("Crabstick Katsu",    "Food",   99m),
-            Item("Spamsilog",          "Food",   99m, R(rice, 1), R(egg, 1)),
-            Item("Hungariansilog",     "Food",   99m, R(rice, 1), R(egg, 1)),
-            Item("Tocilog",            "Food",   99m, R(rice, 1), R(egg, 1)),
-            Item("Tapsilog",           "Food",  109m, R(rice, 1), R(egg, 1)),
-            Item("Sausilog",           "Food",  109m, R(rice, 1), R(egg, 1)),
-            Item("Bacsilog",           "Food",   99m, R(rice, 1), R(egg, 1)),
-            // Food extras (sold as standalone add-ons)
+            // All food items include rice (1 cup) + spring onion garnish; silog items include egg.
+            Item("Pork Tonkatsu",      "Food",  149m, R(porkChop, 1),      R(rice, 1), R(onionSpring, 1)),
+            Item("Chicken Tonkatsu",   "Food",  149m, R(chickenFillet, 1), R(rice, 1), R(onionSpring, 1)),
+            Item("Chicken Poppers",    "Food",  109m, R(chickenPoppers, 100), R(rice, 1), R(onionSpring, 1)),
+            Item("Chicken Fingers",    "Food",  129m, R(chickenFing, 3),   R(rice, 1), R(onionSpring, 1)),
+            Item("Crabstick Katsu",    "Food",   99m, R(crabstick, 4),     R(rice, 1), R(onionSpring, 1)),
+            Item("Spamsilog",          "Food",   99m, R(spam, 2),          R(egg, 1), R(rice, 1)),
+            Item("Hungariansilog",     "Food",   99m, R(hungarian, 1),     R(egg, 1), R(rice, 1)),
+            Item("Tocilog",            "Food",   99m, R(tocino, 100),      R(egg, 1), R(rice, 1)),
+            Item("Tapsilog",           "Food",  109m, R(tapa, 100),        R(egg, 1), R(rice, 1)),
+            Item("Sausilog",           "Food",  109m, R(korSausage, 2),    R(egg, 1), R(rice, 1)),
+            Item("Bacsilog",           "Food",   99m, R(bacon, 2),         R(egg, 1), R(rice, 1)),
+            // Food extras
             Item("Rice",               "Food",   20m, R(rice, 1)),
             Item("Egg",                "Food",   18m, R(egg, 1)),
             Item("Tonkatsu Sauce",     "Food",   15m),
 
-            // ── Cold Brew Coffee ──────────────────────────────────────────────
-            Item("Americano",         "Cold Brew Coffee",  55m, R(coffee, 240), R(cup, 1)),
-            Item("Latte",             "Cold Brew Coffee",  59m, R(coffee, 150), R(milk, 100), R(cup, 1)),
-            Item("Spanish Latte",     "Cold Brew Coffee",  65m, R(coffee, 150), R(milk, 120), R(cup, 1)),
-            Item("Vanilla Latte",     "Cold Brew Coffee",  65m, R(coffee, 150), R(milk, 100), R(syrup, 20), R(cup, 1)),
-            Item("Caramel Macchiato", "Cold Brew Coffee",  69m, R(coffee, 150), R(milk, 100), R(syrup, 20), R(cup, 1)),
-            Item("Cold Brew Latte",   "Cold Brew Coffee",  69m, R(coffee, 200), R(milk, 100), R(cup, 1)),
-            Item("Mocha",             "Cold Brew Coffee",  69m, R(coffee, 150), R(milk, 100), R(syrup, 20), R(cup, 1)),
-            Item("Chao's Coldbrew",   "Cold Brew Coffee",  79m, R(coffee, 240), R(cup, 1)),
+            // ── Cold Brew Coffee (16oz base quantities) ───────────────────────
+            Item("Americano",         "Cold Brew Coffee",  55m, R(coldBrew, 80),  R(cup, 1)),
+            Item("Latte",             "Cold Brew Coffee",  59m, R(coldBrew, 80),  R(milk, 100), R(cup, 1)),
+            Item("Spanish Latte",     "Cold Brew Coffee",  65m, R(coldBrew, 80),  R(milk, 100), R(condensedMilk, 30), R(cup, 1)),
+            Item("Vanilla Latte",     "Cold Brew Coffee",  65m, R(coldBrew, 80),  R(milk, 100), R(vanillaSyrup, 25),  R(cup, 1)),
+            Item("Caramel Macchiato", "Cold Brew Coffee",  69m, R(coldBrew, 80),  R(milk, 100), R(vanillaSyrup, 10),  R(caramelDrizzle, 15), R(cup, 1)),
+            Item("Cold Brew Latte",   "Cold Brew Coffee",  69m, R(coldBrew, 80),  R(coldFoam, 70), R(cup, 1)),
+            Item("Mocha",             "Cold Brew Coffee",  69m, R(coldBrew, 80),  R(milk, 100), R(chocSauce, 20),     R(cup, 1)),
+            Item("Chao's Coldbrew",   "Cold Brew Coffee",  79m, R(coldBrew, 80),  R(sigSyrup, 20), R(cup, 1)),
 
-            // ── Non-Coffee ────────────────────────────────────────────────────
-            Item("Strawberry Milk",   "Non-Coffee",  65m, R(milk, 200), R(syrup, 20), R(cup, 1)),
-            Item("Blueberry Milk",    "Non-Coffee",  65m, R(milk, 200), R(syrup, 20), R(cup, 1)),
-            Item("Mango Cream",       "Non-Coffee",  69m, R(milk, 180), R(syrup, 20), R(cup, 1)),
-            Item("Iced Choco",        "Non-Coffee",  65m, R(milk, 200), R(syrup, 25), R(cup, 1)),
-            Item("Milky Oreo",        "Non-Coffee",  69m, R(milk, 200), R(cup, 1)),
-            Item("Berry Choco Latte", "Non-Coffee",  75m, R(milk, 180), R(syrup, 20), R(cup, 1)),
+            // ── Non-Coffee (16oz base quantities) ────────────────────────────
+            Item("Strawberry Milk",   "Non-Coffee",  65m, R(milk, 140), R(strawJam, 2),   R(cup, 1)),
+            Item("Blueberry Milk",    "Non-Coffee",  65m, R(milk, 140), R(blueJam, 2),    R(cup, 1)),
+            Item("Mango Cream",       "Non-Coffee",  69m, R(milk, 140), R(mangoJam, 2),   R(cup, 1)),
+            Item("Iced Choco",        "Non-Coffee",  65m, R(milk, 140), R(chocPowder, 2), R(chocSauce, 30), R(cup, 1)),
+            Item("Milky Oreo",        "Non-Coffee",  69m, R(milk, 140), R(oreo, 2),       R(cup, 1)),
+            Item("Berry Choco Latte", "Non-Coffee",  75m, R(milk, 140), R(chocPowder, 2), R(berrySyrup, 20), R(cup, 1)),
 
-            // ── Matcha Series ─────────────────────────────────────────────────
-            Item("Matcha Latte",      "Matcha Series",  69m, R(matcha, 8),  R(milk, 200), R(cup, 1)),
-            Item("Dirty Matcha",      "Matcha Series",  75m, R(matcha, 8),  R(milk, 180), R(coffee, 60), R(cup, 1)),
-            Item("Strawberry Matcha", "Matcha Series",  75m, R(matcha, 8),  R(milk, 180), R(syrup, 20), R(cup, 1)),
-            Item("Matcha Frappe",     "Matcha Series",  79m, R(matcha, 10), R(milk, 180), R(cup, 1)),
+            // ── Matcha Series (16oz base quantities) ─────────────────────────
+            Item("Matcha Latte",      "Matcha Series",  69m, R(matchaPowder, 2), R(milk, 150), R(cup, 1)),
+            Item("Dirty Matcha",      "Matcha Series",  75m, R(matchaPowder, 2), R(milk, 100), R(coldBrew, 80),  R(cup, 1)),
+            Item("Strawberry Matcha", "Matcha Series",  75m, R(matchaPowder, 2), R(milk, 120), R(strawJam, 2),  R(cup, 1)),
+            Item("Matcha Frappe",     "Matcha Series",  79m, R(matchaPowder, 2), R(frappeBase, 35), R(milk, 40), R(cup, 1)),
 
-            // ── Frappe ────────────────────────────────────────────────────────
-            // Frappe comes in 4 flavors but is a single POS item; flavour chosen at order time
-            Item("Frappe (Strawberry)",       "Frappe",  69m, R(milk, 200), R(cup, 1)),
-            Item("Frappe (Blueberry)",        "Frappe",  69m, R(milk, 200), R(cup, 1)),
-            Item("Frappe (Cookies & Cream)",  "Frappe",  69m, R(milk, 200), R(cup, 1)),
-            Item("Frappe (Chocolate)",        "Frappe",  69m, R(milk, 200), R(cup, 1)),
-            Item("Frappuccino Mocha",         "Frappe",  75m, R(coffee, 100), R(milk, 180), R(syrup, 20), R(cup, 1)),
-            Item("Milo Dinosaur",             "Frappe",  79m, R(milk, 200), R(cup, 1)),
-            Item("Java Chip",                 "Frappe",  85m, R(coffee, 100), R(milk, 180), R(cup, 1)),
+            // ── Frappe (16oz base quantities) ────────────────────────────────
+            Item("Frappe (Strawberry)",       "Frappe",  69m, R(frappeBase, 35), R(milk, 40), R(strawJam, 2),   R(cup, 1)),
+            Item("Frappe (Blueberry)",        "Frappe",  69m, R(frappeBase, 35), R(milk, 40), R(blueJam, 2),    R(yogurtPowder, 2), R(cup, 1)),
+            Item("Frappe (Cookies & Cream)",  "Frappe",  69m, R(frappeBase, 35), R(milk, 40), R(oreo, 2),       R(cup, 1)),
+            Item("Frappe (Chocolate)",        "Frappe",  69m, R(frappeBase, 35), R(milk, 40), R(chocPowder, 2), R(cup, 1)),
+            Item("Frappuccino Mocha",         "Frappe",  75m, R(frappeBase, 35), R(milk, 40), R(coldBrew, 80),  R(cup, 1)),
+            Item("Milo Dinosaur",             "Frappe",  79m, R(frappeBase, 35), R(milk, 40), R(miloPowder, 2), R(cup, 1)),
+            Item("Java Chip",                 "Frappe",  85m, R(frappeBase, 35), R(milk, 40), R(coldBrew, 80),  R(chocChips, 20), R(chocSauce, 15), R(cup, 1)),
 
-            // ── Fruit Soda ────────────────────────────────────────────────────
-            // One entry per size; flavour is a modifier/preference
-            Item("Fruit Soda (16oz)",  "Fruit Soda",  39m, R(cup, 1)),
-            Item("Fruit Soda (22oz)",  "Fruit Soda",  49m, R(cup, 1)),
+            // ── Fruit Soda (16oz base quantities) ────────────────────────────
+            Item("Fruit Soda (16oz)",  "Fruit Soda",  39m, R(sodaBase, 120), R(fruitSyrup, 2), R(cup, 1)),
+            Item("Fruit Soda (22oz)",  "Fruit Soda",  49m, R(sodaBase, 160), R(fruitSyrup, 3), R(cup, 1)),
 
             // ── Qik's Fried Noodles ───────────────────────────────────────────
-            Item("Plain Noodles",                        "Qik's Fried Noodles",  40m, R(noodles, 1)),
-            Item("Noodles with Egg",                     "Qik's Fried Noodles",  55m, R(noodles, 1), R(egg, 1)),
-            Item("Noodles with Pork Siomai",             "Qik's Fried Noodles",  55m, R(noodles, 1)),
-            Item("Noodles with Japanese Siomai",         "Qik's Fried Noodles",  58m, R(noodles, 1)),
-            Item("Noodles with Korean Sausage",          "Qik's Fried Noodles",  70m, R(noodles, 1)),
-            Item("Overload Noodles",                     "Qik's Fried Noodles",  78m, R(noodles, 1)),
-            Item("Overload Noodles with 2 Eggs",         "Qik's Fried Noodles", 108m, R(noodles, 1), R(egg, 2)),
-            Item("Overload Noodles w/ 4 Pork Siomai",   "Qik's Fried Noodles", 108m, R(noodles, 1)),
-            Item("Overload Noodles w/ 4 Jap Siomai",    "Qik's Fried Noodles", 110m, R(noodles, 1)),
-            Item("Overload Noodles w/ 2 Korean Sausage","Qik's Fried Noodles", 138m, R(noodles, 1)));
+            // Base recipe: 60g noodles + 30g sprouts
+            Item("Plain Noodles",                        "Qik's Fried Noodles",  40m, R(noodles, 60),  R(sprouts, 30)),
+            Item("Noodles with Egg",                     "Qik's Fried Noodles",  55m, R(noodles, 60),  R(sprouts, 30), R(egg, 1)),
+            Item("Noodles with Pork Siomai",             "Qik's Fried Noodles",  55m, R(noodles, 60),  R(sprouts, 30), R(porkSiomai, 2)),
+            Item("Noodles with Japanese Siomai",         "Qik's Fried Noodles",  58m, R(noodles, 60),  R(sprouts, 30), R(japSiomai, 2)),
+            Item("Noodles with Korean Sausage",          "Qik's Fried Noodles",  70m, R(noodles, 60),  R(sprouts, 30), R(korSausage, 1)),
+            // Overload base: 120g noodles + 60g sprouts
+            Item("Overload Noodles",                     "Qik's Fried Noodles",  78m, R(noodles, 120), R(sprouts, 60)),
+            Item("Overload Noodles with 2 Eggs",         "Qik's Fried Noodles", 108m, R(noodles, 120), R(sprouts, 60), R(egg, 2)),
+            Item("Overload Noodles w/ 4 Pork Siomai",   "Qik's Fried Noodles", 108m, R(noodles, 120), R(sprouts, 60), R(porkSiomai, 4)),
+            Item("Overload Noodles w/ 4 Jap Siomai",    "Qik's Fried Noodles", 110m, R(noodles, 120), R(sprouts, 60), R(japSiomai, 4)),
+            Item("Overload Noodles w/ 2 Korean Sausage","Qik's Fried Noodles", 138m, R(noodles, 120), R(sprouts, 60), R(korSausage, 2)));
 
         // ── Modifiers ─────────────────────────────────────────────────────────
         // Beverage categories that share drink add-ons / size / preference
