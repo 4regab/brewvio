@@ -33,20 +33,6 @@ This POS handles ordering, inventory, reporting, and staff management in a singl
 
 ---
 
-## Architecture
-
-```
-Browser → CloudFront
-            ├── /api/*  → API Gateway → Lambda (ASP.NET Core)
-            └── /*      → S3 (static JS/CSS/HTML)
-                                ↓
-                        Supabase PostgreSQL
-```
-
-One CloudFront domain serves both the frontend and the API — no CORS. The Lambda connects to Supabase via the Supavisor transaction pooler. Secrets live in SSM Parameter Store, not in environment variables. Lambda runs at 1769 MB (2 vCPUs) for faster cold starts.
-
----
-
 ## Getting started
 
 ### Prerequisites
