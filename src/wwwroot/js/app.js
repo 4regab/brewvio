@@ -9,6 +9,7 @@ const App = (() => {
     { id: 'inventory', label: 'Inventory', icon: 'bi-box-seam', roles: ['Manager', 'Cashier'] },
     { id: 'menu', label: 'Menu Edit', icon: 'bi-card-list', roles: ['Manager'] },
     { id: 'users', label: 'Users', icon: 'bi-people', roles: ['Manager'] },
+    { id: 'audit', label: 'Audit Log', icon: 'bi-shield-check', roles: ['Manager'] },
     { id: 'settings', label: 'Settings', icon: 'bi-gear', roles: ['Manager'] },
   ];
   const state = { user: null };
