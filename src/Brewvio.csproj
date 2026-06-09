@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk.Web">
+﻿<Project Sdk="Microsoft.NET.Sdk.Web">
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
@@ -6,6 +6,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>Brewvio</RootNamespace>
     <AWSProjectType>Lambda</AWSProjectType>
+    <UserSecretsId>f4643bfb-0f5f-47f4-91a0-0517a21c932f</UserSecretsId>
   </PropertyGroup>
 
   <ItemGroup>
@@ -25,12 +26,6 @@
     <PackageReference Include="QuestPDF" Version="2026.5.0" />
   </ItemGroup>
 
-  <!-- Never publish local secret overrides into the Lambda package. This file is
-       gitignored and only used for local dev; SSM Parameter Store supplies secrets on Lambda. -->
-  <ItemGroup>
-    <Content Remove="appsettings.*.local.json" />
-    <None Include="appsettings.*.local.json" CopyToOutputDirectory="Never" CopyToPublishDirectory="Never" />
-  </ItemGroup>
 
   <!-- Allow test project to access internal members (e.g. SettingsService.ResetTaxRateCache) -->
   <ItemGroup>

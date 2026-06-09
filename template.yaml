@@ -52,7 +52,8 @@ Resources:
           - Fn::Sub: arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter${SsmParameterPath}/*
         - Effect: Allow
           Action: kms:Decrypt
-          Resource: '*'
+          # Scoped to the AWS-managed SSM key for this account/region — not wildcard.
+          Resource: arn:aws:kms:ap-southeast-2:626216981301:key/1440e01c-7327-46b0-8c6c-871bacccaa9e
           Condition:
             StringEquals:
               kms:ViaService:
@@ -72,6 +73,10 @@ Resources:
               Ref: Api
             Path: /{proxy+}
             Method: ANY
+      # Cap concurrency so a bug or traffic spike can't exhaust the account-wide Lambda
+      # concurrency pool (default 1000). 10 is well above the 1-2 concurrent users this
+      # internal tool will ever see; raise if you add background jobs or other functions.
+      ReservedConcurrentExecutions: 10
     Metadata:
       SamResourceId: BrewvioFunction
   BrewvioFunctionLogGroup:
@@ -79,7 +84,7 @@ Resources:
     Properties:
       LogGroupName:
         Fn::Sub: /aws/lambda/${AWS::StackName}-api
-      RetentionInDays: 1
+      RetentionInDays: 90  # 90 days; well within CloudWatch free tier at this usage level
   FrontendBucket:
     Type: AWS::S3::Bucket
     Properties:

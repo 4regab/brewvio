@@ -15,6 +15,7 @@ tmp*
 *.db
 *.db-shm
 *.db-wal
+# appsettings.*.local.json pattern kept as a safety net in case the file is recreated
 appsettings.*.local.json
 
 # Environment / secrets
@@ -30,4 +31,4 @@ api-run.log
 Thumbs.db
 
 # Infrastructure templates (deployed out-of-band, kept local only)
-infra/
+# infra/ — removed from gitignore; IAM templates contain no secrets and should be version-controlled

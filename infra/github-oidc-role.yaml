@@ -1,0 +1,210 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  IAM OIDC provider + deploy role for GitHub Actions (brewvio repo).
+  Deploy once with:
+    aws cloudformation deploy \
+      --template-file infra/github-oidc-role.yaml \
+      --stack-name brewvio-github-oidc \
+      --capabilities CAPABILITY_NAMED_IAM \
+      --parameter-overrides GitHubOrg=<your-github-username-or-org> \
+      --region ap-southeast-2
+
+Parameters:
+  GitHubOrg:
+    Type: String
+    Default: 4regab
+    Description: Your GitHub username or organisation
+  GitHubRepo:
+    Type: String
+    Default: brewvio
+    Description: Repository name (without the org prefix)
+  GitHubBranch:
+    Type: String
+    Default: master
+    Description: Branch that is allowed to assume the role
+
+Resources:
+  # Register GitHub as a trusted OIDC provider (only needed once per AWS account).
+  # If you already have token.actions.githubusercontent.com registered, this stack
+  # will still work - CloudFormation is idempotent for OIDC providers.
+  GitHubOidcProvider:
+    Type: AWS::IAM::OIDCProvider
+    Properties:
+      Url: https://token.actions.githubusercontent.com
+      ClientIdList:
+        - sts.amazonaws.com
+      ThumbprintList:
+        # GitHub's current OIDC thumbprints (SHA-1 of the root CA cert).
+        # GitHub rotates these rarely; check https://github.blog/changelog/ if auth fails.
+        - 6938fd4d98bab03faadb97b34396831e3780aea1
+        - 1c58a3a8518e8759bf075b76b750d4f2df264fcd
+
+  GitHubDeployRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: brewvio-github-deploy
+      Description: Assumed by GitHub Actions to deploy the brewvio stack
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: !GetAtt GitHubOidcProvider.Arn
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                token.actions.githubusercontent.com:aud: sts.amazonaws.com
+              StringLike:
+                # Only the configured branch of this specific repo can assume this role.
+                token.actions.githubusercontent.com:sub:
+                  !Sub "repo:${GitHubOrg}/${GitHubRepo}:ref:refs/heads/${GitHubBranch}"
+      Policies:
+        - PolicyName: brewvio-deploy-policy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              # CloudFormation - create/update/describe the app stack
+              - Sid: CloudFormation
+                Effect: Allow
+                Action:
+                  - cloudformation:CreateStack
+                  - cloudformation:UpdateStack
+                  - cloudformation:DescribeStacks
+                  - cloudformation:DescribeStackEvents
+                  - cloudformation:DescribeStackResource
+                  - cloudformation:DescribeStackResources
+                  - cloudformation:GetTemplate
+                  - cloudformation:ValidateTemplate
+                  - cloudformation:CreateChangeSet
+                  - cloudformation:DescribeChangeSet
+                  - cloudformation:ExecuteChangeSet
+                  - cloudformation:DeleteChangeSet
+                Resource:
+                  - !Sub "arn:aws:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/brewvio/*"
+                  - !Sub "arn:aws:cloudformation:${AWS::Region}:aws:transform/Serverless-2016-10-31"
+
+              # SAM transform - needed to resolve the SAM transform
+              - Sid: ServerlessTransform
+                Effect: Allow
+                Action:
+                  - serverlessrepo:GetApplication
+                  - serverlessrepo:CreateCloudFormationTemplate
+                  - serverlessrepo:GetCloudFormationTemplate
+                Resource: "*"
+
+              # SSM - lets CloudFormation resolve the {{resolve:ssm:/brewvio/ORIGIN_VERIFY}}
+              # dynamic reference used by the CloudFront origin custom header at deploy time.
+              - Sid: SsmDynamicReference
+                Effect: Allow
+                Action:
+                  - ssm:GetParameter
+                  - ssm:GetParameters
+                Resource:
+                  - !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/brewvio"
+                  - !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/brewvio/*"
+
+              # Lambda - create/update function code and config
+              - Sid: Lambda
+                Effect: Allow
+                Action:
+                  - lambda:CreateFunction
+                  - lambda:UpdateFunctionCode
+                  - lambda:UpdateFunctionConfiguration
+                  - lambda:GetFunction
+                  - lambda:GetFunctionConfiguration
+                  - lambda:AddPermission
+                  - lambda:RemovePermission
+                  - lambda:TagResource
+                  - lambda:PublishVersion
+                  - lambda:CreateAlias
+                  - lambda:UpdateAlias
+                  - lambda:GetAlias
+                Resource:
+                  - !Sub "arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:brewvio-*"
+
+              # API Gateway - managed by SAM/CloudFormation
+              - Sid: ApiGateway
+                Effect: Allow
+                Action:
+                  - apigateway:GET
+                  - apigateway:POST
+                  - apigateway:PUT
+                  - apigateway:PATCH
+                  - apigateway:DELETE
+                  - apigateway:TagResource
+                Resource: "*"
+
+              # S3 - upload Lambda package + sync frontend
+              - Sid: S3
+                Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:GetObject
+                  - s3:DeleteObject
+                  - s3:ListBucket
+                  - s3:GetBucketLocation
+                  - s3:GetBucketVersioning
+                Resource:
+                  # SAM deploy bucket
+                  - "arn:aws:s3:::aws-sam-cli-managed-default-samclisourcebucket-xczut1dcayng"
+                  - "arn:aws:s3:::aws-sam-cli-managed-default-samclisourcebucket-xczut1dcayng/*"
+                  # Frontend bucket - wildcard because the bucket name is a CFN output
+                  - !Sub "arn:aws:s3:::*brewvio*"
+                  - !Sub "arn:aws:s3:::*brewvio*/*"
+
+              # CloudFront - create invalidations + manage the distribution and the
+              # custom response-headers policy (required for the SecurityHeadersPolicy resource).
+              - Sid: CloudFront
+                Effect: Allow
+                Action:
+                  - cloudfront:CreateInvalidation
+                  - cloudfront:GetDistribution
+                  - cloudfront:GetDistributionConfig
+                  - cloudfront:UpdateDistribution
+                  - cloudfront:CreateDistribution
+                  - cloudfront:TagResource
+                  - cloudfront:CreateResponseHeadersPolicy
+                  - cloudfront:GetResponseHeadersPolicy
+                  - cloudfront:GetResponseHeadersPolicyConfig
+                  - cloudfront:UpdateResponseHeadersPolicy
+                  - cloudfront:DeleteResponseHeadersPolicy
+                  - cloudfront:ListResponseHeadersPolicies
+                Resource: "*"
+
+              # CloudWatch Logs - CloudFormation creates the log group
+              - Sid: CloudWatchLogs
+                Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:PutRetentionPolicy
+                  - logs:DescribeLogGroups
+                  - logs:DeleteLogGroup
+                  - logs:TagLogGroup
+                Resource:
+                  - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/brewvio-*"
+
+              # IAM - CloudFormation needs to create/update the Lambda execution role
+              - Sid: IamLambdaRole
+                Effect: Allow
+                Action:
+                  - iam:CreateRole
+                  - iam:UpdateRole
+                  - iam:DeleteRole
+                  - iam:GetRole
+                  - iam:PassRole
+                  - iam:AttachRolePolicy
+                  - iam:DetachRolePolicy
+                  - iam:PutRolePolicy
+                  - iam:DeleteRolePolicy
+                  - iam:GetRolePolicy
+                  - iam:TagRole
+                Resource:
+                  - !Sub "arn:aws:iam::${AWS::AccountId}:role/brewvio-*"
+
+Outputs:
+  RoleArn:
+    Description: ARN to paste into the workflow's role-to-assume input
+    Value: !GetAtt GitHubDeployRole.Arn
+  OidcProviderArn:
+    Description: ARN of the GitHub OIDC provider
+    Value: !GetAtt GitHubOidcProvider.Arn

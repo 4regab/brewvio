@@ -97,7 +97,7 @@ public class AuthService(BrewvioDbContext db, IConfiguration config, AuditServic
         {
             Issuer = config["Jwt:Issuer"],
             Audience = config["Jwt:Audience"],
-            Expires = DateTime.UtcNow.AddHours(8),
+            Expires = DateTime.UtcNow.AddHours(2),  // 2h window; rotate SSM JWT_KEY to invalidate all sessions if needed
             SigningCredentials = creds,
             Subject = new ClaimsIdentity(new[]
             {

@@ -13,11 +13,9 @@ using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Local-only secrets override (gitignored): appsettings.Development.local.json
-// keeps real connection strings / keys out of source control.
-builder.Configuration.AddJsonFile(
-    $"appsettings.{builder.Environment.EnvironmentName}.local.json",
-    optional: true, reloadOnChange: true);
+// User secrets (Development only) are auto-wired by the WebApplication host when
+// ASPNETCORE_ENVIRONMENT=Development — no explicit AddJsonFile needed.
+// On Lambda, secrets are loaded from SSM Parameter Store (see below).
 
 // On Lambda, load secrets (DATABASE_URL, JWT_KEY) from SSM Parameter Store under the
 // /brewvio path instead of plaintext Lambda env vars. SecureString params are decrypted
