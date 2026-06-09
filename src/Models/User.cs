@@ -13,6 +13,11 @@ public class User
     // must Approve (-> Active) or Reject. Only Active users may sign in.
     public string Status { get; set; } = UserStatus.Active;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
+    // Tracks when the most recent valid token was issued. Any token whose iat (issued-at)
+    // predates this value is considered revoked — used to invalidate sessions immediately when
+    // a user is deactivated, rejected, or has their password reset by a manager.
+    public DateTime? TokenIssuedAt { get; set; }
 }
 
 // Account lifecycle states for the registration/approval workflow.

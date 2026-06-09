@@ -180,6 +180,9 @@ Resources:
                   - logs:DescribeLogGroups
                   - logs:DeleteLogGroup
                   - logs:TagLogGroup
+                  - logs:ListTagsForResource
+                  - logs:TagResource
+                  - logs:UntagResource
                 Resource:
                   - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/brewvio-*"
 

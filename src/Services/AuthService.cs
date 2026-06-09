@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using System.Security.Cryptography;
 using System.Text;
 using Brewvio.Data;
 using Brewvio.Dtos;
@@ -39,14 +40,31 @@ public class AuthService(BrewvioDbContext db, IConfiguration config, AuditServic
             await db.SaveChangesAsync(ct);
         }
 
-        var token = IssueToken(user);
+        var issuedAt = DateTime.UtcNow;
+        var token = IssueToken(user, issuedAt);
+        // Record when the token was issued so future deactivations/resets can invalidate it.
+        user.TokenIssuedAt = issuedAt;
+        await db.SaveChangesAsync(ct);
         await audit.LogAsync("Login", $"{user.Username} ({user.Role}) signed in.", ct);
         return new LoginOutcome(new LoginResponse(token, user.Username, user.FullName, user.Role), null);
     }
 
     // Self-service sign-up: creates a Pending account that a Manager must approve.
+    // Requires a valid REGISTRATION_TOKEN to prevent open registration from the public internet.
     public async Task<RegisterResponse> RegisterAsync(RegisterRequest req, CancellationToken ct = default)
     {
+        // Validate invite token before touching the DB or running the password hasher.
+        // REGISTRATION_TOKEN is loaded from SSM on Lambda (same path as JWT_KEY/DATABASE_URL).
+        // If the config key is absent (e.g. a fresh local dev environment) registration is open,
+        // matching the previous behaviour so existing dev setups are not broken.
+        var requiredToken = config["REGISTRATION_TOKEN"];
+        if (!string.IsNullOrEmpty(requiredToken) &&
+            (string.IsNullOrEmpty(req.InviteToken) ||
+             !CryptographicOperations.FixedTimeEquals(
+                 System.Text.Encoding.UTF8.GetBytes(req.InviteToken),
+                 System.Text.Encoding.UTF8.GetBytes(requiredToken))))
+            throw new UnauthorizedAccessException("Invalid or missing invite token.");
+
         if (string.IsNullOrWhiteSpace(req.Username) || string.IsNullOrWhiteSpace(req.Password))
             throw new ArgumentException("Username and password are required.");
         if (req.Password.Length < 8)
@@ -82,7 +100,7 @@ public class AuthService(BrewvioDbContext db, IConfiguration config, AuditServic
         return user is null ? null : new AccountStatusResponse(user.Username, user.Status);
     }
 
-    private string IssueToken(User user)
+    private string IssueToken(User user, DateTime issuedAt)
     {
         // Resolve the signing key the same way Program.cs resolves it for token *validation*:
         // JWT_KEY from configuration (env var locally / SSM Parameter Store on Lambda), falling
@@ -97,7 +115,8 @@ public class AuthService(BrewvioDbContext db, IConfiguration config, AuditServic
         {
             Issuer = config["Jwt:Issuer"],
             Audience = config["Jwt:Audience"],
-            Expires = DateTime.UtcNow.AddHours(2),  // 2h window; rotate SSM JWT_KEY to invalidate all sessions if needed
+            IssuedAt = issuedAt,                    // explicit iat so revocation check is precise
+            Expires = issuedAt.AddHours(2),         // 2h window; rotate SSM JWT_KEY to invalidate all sessions if needed
             SigningCredentials = creds,
             Subject = new ClaimsIdentity(new[]
             {

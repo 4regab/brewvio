@@ -41,6 +41,8 @@ public class UserService(BrewvioDbContext db, AuditService audit)
             throw new InvalidOperationException("Only pending accounts can be rejected.");
         user.Status = UserStatus.Rejected;
         user.IsActive = false;
+        // Invalidate any token that may have been issued before this rejection.
+        user.TokenIssuedAt = DateTime.UtcNow;
         audit.Add("UserRejected", $"{user.Username} ({user.Role}) request declined.");
         await db.SaveChangesAsync(ct);
         return new UserDto(user.Id, user.Username, user.FullName, user.Role, user.IsActive, user.Status, user.CreatedAt);
@@ -76,6 +78,10 @@ public class UserService(BrewvioDbContext db, AuditService audit)
         // Keep Status in sync for already-decided accounts (don't resurrect Pending/Rejected here).
         if (user.Status == UserStatus.Active || user.Status == UserStatus.Rejected)
             user.Status = r.IsActive ? UserStatus.Active : UserStatus.Rejected;
+        // If the account is being deactivated, bump TokenIssuedAt so any live token is rejected
+        // immediately by the revocation middleware — no need to wait for the 2h JWT expiry.
+        if (!r.IsActive)
+            user.TokenIssuedAt = DateTime.UtcNow;
         audit.Add("UserUpdated", $"{user.Username}: role {user.Role}, active={user.IsActive}");
         await db.SaveChangesAsync(ct);
         return new UserDto(user.Id, user.Username, user.FullName, user.Role, user.IsActive, user.Status, user.CreatedAt);
@@ -88,6 +94,8 @@ public class UserService(BrewvioDbContext db, AuditService audit)
         var user = await db.Users.FindAsync([id], ct);
         if (user is null) return false;
         user.PasswordHash = PasswordHasher.Hash(newPassword);
+        // Invalidate all existing sessions — the old password (and its token) is no longer valid.
+        user.TokenIssuedAt = DateTime.UtcNow;
         audit.Add("PasswordReset", $"Password reset for {user.Username}");
         await db.SaveChangesAsync(ct);
         return true;

@@ -1,5 +1,6 @@
 using Brewvio.Data;
 using Brewvio.Helpers;
+using Brewvio.Models;
 using Brewvio.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
@@ -181,6 +182,13 @@ app.Use(async (ctx, next) =>
         ctx.Response.StatusCode = StatusCodes.Status400BadRequest;
         await ctx.Response.WriteAsJsonAsync(new { message = ex.Message, correlationId });
     }
+    catch (UnauthorizedAccessException ex)
+    {
+        // Invite-token mismatch on registration -> 403, not 400 (bad credential, not bad input).
+        logger.LogWarning(ex, "Unauthorized on {Method} {Path}", ctx.Request.Method, ctx.Request.Path.Value);
+        ctx.Response.StatusCode = StatusCodes.Status403Forbidden;
+        await ctx.Response.WriteAsJsonAsync(new { message = ex.Message, correlationId });
+    }
     catch (OperationCanceledException ex) when (ctx.RequestAborted.IsCancellationRequested)
     {
         // The client disconnected / timed out and the CancellationToken tripped mid-request.
@@ -202,6 +210,47 @@ app.Use(async (ctx, next) =>
 app.UseDefaultFiles();
 app.UseStaticFiles();
 app.UseAuthentication();
+
+// ── JWT revocation check ──────────────────────────────────────────────────────────────────
+// After the JWT bearer middleware has validated the signature and expiry, check that the
+// token was issued *after* the user's TokenIssuedAt watermark. If a manager deactivates an
+// account or resets a password, TokenIssuedAt is bumped to UtcNow, which causes all tokens
+// issued before that moment to be rejected here — no need to wait for the 2h JWT expiry.
+// The DB read is intentionally small (two columns) and the result is not cached; at 1-2
+// users/day the overhead is negligible and correctness is more important than shaving a
+// query here.
+app.Use(async (ctx, next) =>
+{
+    if (ctx.User.Identity?.IsAuthenticated == true)
+    {
+        var subClaim = ctx.User.FindFirst("sub")?.Value;
+        var iatClaim = ctx.User.FindFirst("iat")?.Value;
+        if (int.TryParse(subClaim, out var userId) && long.TryParse(iatClaim, out var iatUnix))
+        {
+            var db = ctx.RequestServices.GetRequiredService<BrewvioDbContext>();
+            var watermark = await db.Users
+                .Where(u => u.Id == userId)
+                .Select(u => new { u.TokenIssuedAt, u.IsActive, u.Status })
+                .FirstOrDefaultAsync(ctx.RequestAborted);
+
+            bool revoked =
+                watermark is null ||                                        // user deleted
+                !watermark.IsActive ||                                      // deactivated
+                watermark.Status != UserStatus.Active ||                    // rejected / pending
+                (watermark.TokenIssuedAt.HasValue &&
+                 iatUnix < new DateTimeOffset(watermark.TokenIssuedAt.Value).ToUnixTimeSeconds());
+
+            if (revoked)
+            {
+                ctx.Response.StatusCode = StatusCodes.Status401Unauthorized;
+                await ctx.Response.WriteAsJsonAsync(new { message = "Session has been revoked. Please sign in again." });
+                return;
+            }
+        }
+    }
+    await next();
+});
+
 app.UseAuthorization();
 app.MapControllers();
 
