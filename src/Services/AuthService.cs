@@ -1,5 +1,4 @@
 using System.Security.Claims;
-using System.Security.Cryptography;
 using System.Text;
 using Brewvio.Data;
 using Brewvio.Dtos;
@@ -50,21 +49,8 @@ public class AuthService(BrewvioDbContext db, IConfiguration config, AuditServic
     }
 
     // Self-service sign-up: creates a Pending account that a Manager must approve.
-    // Requires a valid REGISTRATION_TOKEN to prevent open registration from the public internet.
     public async Task<RegisterResponse> RegisterAsync(RegisterRequest req, CancellationToken ct = default)
     {
-        // Validate invite token before touching the DB or running the password hasher.
-        // REGISTRATION_TOKEN is loaded from SSM on Lambda (same path as JWT_KEY/DATABASE_URL).
-        // If the config key is absent (e.g. a fresh local dev environment) registration is open,
-        // matching the previous behaviour so existing dev setups are not broken.
-        var requiredToken = config["REGISTRATION_TOKEN"];
-        if (!string.IsNullOrEmpty(requiredToken) &&
-            (string.IsNullOrEmpty(req.InviteToken) ||
-             !CryptographicOperations.FixedTimeEquals(
-                 System.Text.Encoding.UTF8.GetBytes(req.InviteToken),
-                 System.Text.Encoding.UTF8.GetBytes(requiredToken))))
-            throw new UnauthorizedAccessException("Invalid or missing invite token.");
-
         if (string.IsNullOrWhiteSpace(req.Username) || string.IsNullOrWhiteSpace(req.Password))
             throw new ArgumentException("Username and password are required.");
         if (req.Password.Length < 8)

@@ -7,8 +7,7 @@ public record MeResponse(int Id, string Username, string FullName, string Role);
 
 // ----- Self-service registration & approval workflow -----
 // A sign-up creates a Pending account; a Manager approves (-> Active) or rejects it.
-// InviteToken must match the REGISTRATION_TOKEN SSM parameter to prevent open registration.
-public record RegisterRequest(string Username, string FullName, string Password, string Role, string? InviteToken = null);
+public record RegisterRequest(string Username, string FullName, string Password, string Role);
 public record RegisterResponse(int Id, string Username, string Status);
 
 // Polled by the "Authenticating…" screen so the SPA can advance to "Account Approved!"

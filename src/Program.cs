@@ -182,13 +182,6 @@ app.Use(async (ctx, next) =>
         ctx.Response.StatusCode = StatusCodes.Status400BadRequest;
         await ctx.Response.WriteAsJsonAsync(new { message = ex.Message, correlationId });
     }
-    catch (UnauthorizedAccessException ex)
-    {
-        // Invite-token mismatch on registration -> 403, not 400 (bad credential, not bad input).
-        logger.LogWarning(ex, "Unauthorized on {Method} {Path}", ctx.Request.Method, ctx.Request.Path.Value);
-        ctx.Response.StatusCode = StatusCodes.Status403Forbidden;
-        await ctx.Response.WriteAsJsonAsync(new { message = ex.Message, correlationId });
-    }
     catch (OperationCanceledException ex) when (ctx.RequestAborted.IsCancellationRequested)
     {
         // The client disconnected / timed out and the CancellationToken tripped mid-request.
