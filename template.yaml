@@ -120,7 +120,7 @@ Resources:
       ResponseHeadersPolicyConfig:
         Name:
           Fn::Sub: ${AWS::StackName}-security-headers
-        Comment: HSTS, anti-clickjacking, nosniff, referrer, Permissions-Policy, and a Report-Only CSP.
+        Comment: HSTS, anti-clickjacking, nosniff, referrer, Permissions-Policy, and enforced CSP.
         SecurityHeadersConfig:
           StrictTransportSecurity:
             Override: true
@@ -141,7 +141,7 @@ Resources:
             ModeBlock: true
         CustomHeadersConfig:
           Items:
-          - Header: Content-Security-Policy-Report-Only
+          - Header: Content-Security-Policy
             Override: true
             Value: "default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com https://cdn.jsdelivr.net; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'; upgrade-insecure-requests"
           - Header: Permissions-Policy
