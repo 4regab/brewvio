@@ -109,11 +109,9 @@ Resources:
         SigningProtocol: sigv4
   # Custom response-headers policy. Enforces HSTS, X-Frame-Options DENY, X-Content-Type-Options,
   # Referrer-Policy and X-XSS-Protection (same coverage as the old AWS-managed policy) and adds a
-  # strict Permissions-Policy plus a Content-Security-Policy in REPORT-ONLY mode. Report-Only lets
-  # the browser report violations without blocking, so we can confirm nothing breaks before
-  # promoting it to an enforced Content-Security-Policy. CSP sources are scoped to exactly what
-  # the frontend loads: jsDelivr (Bootstrap + Chart.js), Google Fonts, a data: favicon, and the
-  # same-origin /api. The deployment role needs cloudfront:*ResponseHeadersPolicy permissions.
+  # strict Permissions-Policy plus an enforced Content-Security-Policy. CSP sources are scoped to
+  # exactly what the frontend loads: jsDelivr (Bootstrap + Chart.js), Google Fonts, a data: favicon,
+  # and the same-origin /api. The deployment role needs cloudfront:*ResponseHeadersPolicy permissions.
   SecurityHeadersPolicy:
     Type: AWS::CloudFront::ResponseHeadersPolicy
     Properties:
@@ -139,11 +137,15 @@ Resources:
             Override: true
             Protection: true
             ModeBlock: true
+          # ContentSecurityPolicy is a first-class SecurityHeadersConfig field — NOT a
+          # custom header. Putting it in CustomHeadersConfig causes an InvalidRequest
+          # error because CloudFront rejects semicolons/quotes in custom header values.
+          ContentSecurityPolicy:
+            Override: true
+            ContentSecurityPolicy: "default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com https://cdn.jsdelivr.net; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'; upgrade-insecure-requests"
+        # Permissions-Policy has no first-class CloudFront field, so it goes here.
         CustomHeadersConfig:
           Items:
-          - Header: Content-Security-Policy
-            Override: true
-            Value: "default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com https://cdn.jsdelivr.net; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'; upgrade-insecure-requests"
           - Header: Permissions-Policy
             Override: true
             Value: "accelerometer=(), autoplay=(), camera=(), display-capture=(), encrypted-media=(), fullscreen=(self), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), midi=(), payment=(), usb=(), browsing-topics=()"
