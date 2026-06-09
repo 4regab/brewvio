@@ -8,6 +8,7 @@ using Microsoft.IdentityModel.Tokens;
 using Amazon.Lambda.AspNetCoreServer.Hosting;
 using Amazon.Lambda.AspNetCoreServer;
 using Npgsql;
+using System.Security.Cryptography;
 using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -123,6 +124,32 @@ builder.Services.AddAWSLambdaHosting(LambdaEventSource.HttpApi, options =>
         ResponseContentEncoding.Base64));
 
 var app = builder.Build();
+
+// Origin lock: when ORIGIN_VERIFY is configured (loaded from the SSM parameter
+// ${SsmParameterPath}/ORIGIN_VERIFY on Lambda), require the matching secret in the
+// X-Origin-Verify header that CloudFront injects on requests to the API origin. Requests
+// that hit the public API Gateway URL directly lack the header and get a 403, so all
+// traffic is forced through CloudFront (where TLS + security headers are applied) — no WAF
+// needed. Runs first so rejected requests are cheap. Locally ORIGIN_VERIFY is unset, so the
+// check is skipped and dev/test behave exactly as before. Constant-time compare avoids
+// leaking the secret via response timing.
+var originVerifySecret = builder.Configuration["ORIGIN_VERIFY"];
+if (!string.IsNullOrEmpty(originVerifySecret))
+{
+    var expected = Encoding.UTF8.GetBytes(originVerifySecret);
+    app.Use(async (ctx, next) =>
+    {
+        var provided = ctx.Request.Headers["X-Origin-Verify"].FirstOrDefault();
+        if (provided is null ||
+            !CryptographicOperations.FixedTimeEquals(Encoding.UTF8.GetBytes(provided), expected))
+        {
+            ctx.Response.StatusCode = StatusCodes.Status403Forbidden;
+            await ctx.Response.WriteAsJsonAsync(new { message = "Forbidden." });
+            return;
+        }
+        await next();
+    });
+}
 
 // Correlation id + structured request logging. Every request gets a trace id (reusing an
 // inbound X-Correlation-Id / X-Amzn-Trace-Id when present) that flows into a logging scope, the

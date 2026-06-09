@@ -107,25 +107,46 @@ Resources:
         OriginAccessControlOriginType: s3
         SigningBehavior: always
         SigningProtocol: sigv4
-  # NOTE: A custom ResponseHeadersPolicy requires cloudfront:CreateResponseHeadersPolicy
-  # on the deployment role. Until that permission is granted, we reference the
-  # AWS-managed "Security headers policy" (ID below) which is available in every
-  # account with no extra permissions needed.
-  # Managed policy covers: HSTS, X-Frame-Options DENY, X-Content-Type-Options,
-  # Referrer-Policy strict-origin-when-cross-origin, XSS-Protection.
-  # To restore custom Permissions-Policy and CSP-Report-Only headers, grant the
-  # cloudfront:CreateResponseHeadersPolicy permission to the deployment role and
-  # uncomment the SecurityHeadersPolicy resource below.
-  #
-  # SecurityHeadersPolicy:
-  #   Type: AWS::CloudFront::ResponseHeadersPolicy
-  #   Properties:
-  #     ResponseHeadersPolicyConfig:
-  #       Name: !Sub ${AWS::StackName}-security-headers
-  #       ...
-  #
-  # AWS-managed security headers policy ID (same in all regions/accounts):
-  # 67f7725c-6f97-4210-82d7-5512b31e9d03
+  # Custom response-headers policy. Enforces HSTS, X-Frame-Options DENY, X-Content-Type-Options,
+  # Referrer-Policy and X-XSS-Protection (same coverage as the old AWS-managed policy) and adds a
+  # strict Permissions-Policy plus a Content-Security-Policy in REPORT-ONLY mode. Report-Only lets
+  # the browser report violations without blocking, so we can confirm nothing breaks before
+  # promoting it to an enforced Content-Security-Policy. CSP sources are scoped to exactly what
+  # the frontend loads: jsDelivr (Bootstrap + Chart.js), Google Fonts, a data: favicon, and the
+  # same-origin /api. The deployment role needs cloudfront:*ResponseHeadersPolicy permissions.
+  SecurityHeadersPolicy:
+    Type: AWS::CloudFront::ResponseHeadersPolicy
+    Properties:
+      ResponseHeadersPolicyConfig:
+        Name:
+          Fn::Sub: ${AWS::StackName}-security-headers
+        Comment: HSTS, anti-clickjacking, nosniff, referrer, Permissions-Policy, and a Report-Only CSP.
+        SecurityHeadersConfig:
+          StrictTransportSecurity:
+            Override: true
+            IncludeSubdomains: true
+            Preload: true
+            AccessControlMaxAgeSec: 31536000
+          ContentTypeOptions:
+            Override: true
+          FrameOptions:
+            Override: true
+            FrameOption: DENY
+          ReferrerPolicy:
+            Override: true
+            ReferrerPolicy: strict-origin-when-cross-origin
+          XSSProtection:
+            Override: true
+            Protection: true
+            ModeBlock: true
+        CustomHeadersConfig:
+          Items:
+          - Header: Content-Security-Policy-Report-Only
+            Override: true
+            Value: "default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com https://cdn.jsdelivr.net; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'; upgrade-insecure-requests"
+          - Header: Permissions-Policy
+            Override: true
+            Value: "accelerometer=(), autoplay=(), camera=(), display-capture=(), encrypted-media=(), fullscreen=(self), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), midi=(), payment=(), usb=(), browsing-topics=()"
   Distribution:
     Type: AWS::CloudFront::Distribution
     Properties:
@@ -147,6 +168,16 @@ Resources:
             Fn::Sub: ${Api}.execute-api.${AWS::Region}.amazonaws.com
           CustomOriginConfig:
             OriginProtocolPolicy: https-only
+          # Origin lock: CloudFront injects this shared secret on every request to the API
+          # origin. The Lambda rejects any request whose X-Origin-Verify header is missing or
+          # wrong (i.e. requests sent straight to the public API Gateway URL), forcing all
+          # traffic through CloudFront. The value is read from the SSM String parameter
+          # ${SsmParameterPath}/ORIGIN_VERIFY at deploy time. It must be a plaintext String (not
+          # SecureString) because CloudFront does not support the ssm-secure dynamic reference.
+          OriginCustomHeaders:
+          - HeaderName: X-Origin-Verify
+            HeaderValue:
+              Fn::Sub: '{{resolve:ssm:${SsmParameterPath}/ORIGIN_VERIFY}}'
         DefaultCacheBehavior:
           TargetOriginId: s3-frontend
           ViewerProtocolPolicy: redirect-to-https
@@ -155,8 +186,8 @@ Resources:
           - HEAD
           - OPTIONS
           CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6
-          # AWS-managed Security headers policy — no deployment IAM permission required
-          ResponseHeadersPolicyId: 67f7725c-6f97-4210-82d7-5512b31e9d03
+          ResponseHeadersPolicyId:
+            Ref: SecurityHeadersPolicy
         CacheBehaviors:
         - PathPattern: /api/*
           TargetOriginId: api
@@ -171,8 +202,8 @@ Resources:
           - DELETE
           CachePolicyId: 4135ea2d-6df8-44a3-9df3-4b5a84be39ad
           OriginRequestPolicyId: b689b0a8-53d0-40ab-baf2-68738e2966ac
-          # AWS-managed Security headers policy — no deployment IAM permission required
-          ResponseHeadersPolicyId: 67f7725c-6f97-4210-82d7-5512b31e9d03
+          ResponseHeadersPolicyId:
+            Ref: SecurityHeadersPolicy
   FrontendBucketPolicy:
     Type: AWS::S3::BucketPolicy
     Properties:

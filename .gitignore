@@ -28,3 +28,6 @@ api-run.log
 # OS
 .DS_Store
 Thumbs.db
+
+# Infrastructure templates (deployed out-of-band, kept local only)
+infra/
