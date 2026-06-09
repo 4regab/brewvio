@@ -19,6 +19,7 @@
          trigger CS1705 against the src assembly. -->
     <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.8" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.8" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" Version="10.0.8" />
   </ItemGroup>
 
   <!-- Tests exercise services against a real PostgreSQL (per README), so we need ASP.NET types
