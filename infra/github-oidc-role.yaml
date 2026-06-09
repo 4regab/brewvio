@@ -103,7 +103,10 @@ Resources:
                   - !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/brewvio"
                   - !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/brewvio/*"
 
-              # Lambda - create/update function code and config
+              # Lambda - create/update function code and config.
+              # PutFunctionConcurrency + DeleteFunctionConcurrency are required by CloudFormation
+              # when rolling back a function that has ReservedConcurrentExecutions set — without
+              # them the rollback fails and the stack gets stuck in UPDATE_ROLLBACK_FAILED.
               - Sid: Lambda
                 Effect: Allow
                 Action:
@@ -119,6 +122,8 @@ Resources:
                   - lambda:CreateAlias
                   - lambda:UpdateAlias
                   - lambda:GetAlias
+                  - lambda:PutFunctionConcurrency
+                  - lambda:DeleteFunctionConcurrency
                 Resource:
                   - !Sub "arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:brewvio-*"
 
@@ -134,7 +139,9 @@ Resources:
                   - apigateway:TagResource
                 Resource: "*"
 
-              # S3 - upload Lambda package + sync frontend
+              # S3 - upload Lambda package + sync frontend.
+              # PutBucketTagging is required by CloudFormation during tagging operations
+              # on the frontend bucket — without it rollback fails with UnauthorizedTaggingOperation.
               - Sid: S3
                 Effect: Allow
                 Action:
@@ -144,6 +151,8 @@ Resources:
                   - s3:ListBucket
                   - s3:GetBucketLocation
                   - s3:GetBucketVersioning
+                  - s3:PutBucketTagging
+                  - s3:GetBucketTagging
                 Resource:
                   # SAM deploy bucket
                   - "arn:aws:s3:::aws-sam-cli-managed-default-samclisourcebucket-xczut1dcayng"
@@ -171,7 +180,10 @@ Resources:
                   - cloudfront:ListResponseHeadersPolicies
                 Resource: "*"
 
-              # CloudWatch Logs - CloudFormation creates the log group
+              # CloudWatch Logs - CloudFormation creates the log group.
+              # ListTagsForResource + UntagResource are called by CloudFormation during
+              # rollback tagging operations — without them rollback fails with
+              # UnauthorizedTaggingOperation and the stack gets stuck.
               - Sid: CloudWatchLogs
                 Effect: Allow
                 Action:
@@ -181,8 +193,10 @@ Resources:
                   - logs:DeleteLogGroup
                   - logs:TagLogGroup
                   - logs:ListTagsForResource
+                  - logs:ListTagsLogGroup
                   - logs:TagResource
                   - logs:UntagResource
+                  - logs:UntagLogGroup
                 Resource:
                   - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/brewvio-*"
 
