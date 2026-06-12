@@ -101,7 +101,7 @@ jobs:
       - name: Deploy Lambda (dotnet lambda deploy-serverless)
         run: |
           dotnet lambda deploy-serverless \
-            --template template.yaml \
+            --template infra/template.yaml \
             --stack-name ${{ env.STACK_NAME }} \
             --s3-bucket ${{ env.S3_DEPLOY_BUCKET }} \
             --region ${{ env.AWS_REGION }}

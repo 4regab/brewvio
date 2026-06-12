@@ -28,6 +28,10 @@ public record DraftDto(int Id, DateTime Timestamp, string Cashier, string Paymen
 public record CancelOrderRequest(string Reason);
 public record RefundRequest(string Reason);
 
+// ----- Manager status override (free transition to Preparing/Completed/Refunded) -----
+// Reason is required only when moving to "Refunded" (mirrors RefundRequest semantics).
+public record SetStatusRequest([property: JsonRequired] string Status, string? Reason);
+
 // ----- Transaction history -----
 public record TransactionSummaryDto(int Id, DateTime Timestamp, decimal TotalAmount, string PaymentMethod,
     string Status, string Cashier, int ItemCount, string ItemSummary);

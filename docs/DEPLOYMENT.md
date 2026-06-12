@@ -20,6 +20,8 @@ automatically — you do **not** set them as environment variables on the functi
 | `ASPNETCORE_URLS` | Kestrel bind address (local only; ignored on Lambda) | `http://localhost:5000` |
 
 > `DATABASE_URL` (Supabase pooler URI) is only used on Lambda and is read from SSM — never set it locally unless you want to test against Supabase directly.
+>
+> `ORIGIN_VERIFY` is only used on Lambda (read from SSM). Leave it unset locally — the origin-lock middleware is skipped when it is absent, so dev/test behave normally.
 
 ### Tests
 
@@ -33,10 +35,11 @@ The Lambda function reads its secrets at startup from SSM Parameter Store under 
 These are created once, out-of-band — CloudFormation cannot manage `SecureString` parameters.
 **You never pass these as Lambda environment variables or deploy-time arguments.**
 
-| SSM parameter | Purpose |
-|---------------|---------|
-| `/brewvio/DATABASE_URL` | Supabase **transaction pooler** URI, port `6543` |
-| `/brewvio/JWT_KEY` | Production JWT signing key (≥ 32 bytes) |
+| SSM parameter | Type | Purpose |
+|---------------|------|---------|
+| `/brewvio/DATABASE_URL` | SecureString | Supabase **transaction pooler** URI, port `6543` |
+| `/brewvio/JWT_KEY` | SecureString | Production JWT signing key (≥ 32 bytes) |
+| `/brewvio/ORIGIN_VERIFY` | String | Origin-lock shared secret. CloudFront injects it as the `X-Origin-Verify` header on requests to the API origin; the Lambda rejects requests that lack it. Must be a plaintext **String** (not SecureString) because CloudFront's `{{resolve:ssm:...}}` dynamic reference cannot read SecureString values. |
 
 To create or update them:
 
@@ -44,13 +47,15 @@ To create or update them:
 aws ssm put-parameter --name /brewvio/DATABASE_URL --type SecureString --value 'postgres://postgres:<pass>@db.<ref>.supabase.co:6543/postgres'
 
 aws ssm put-parameter --name /brewvio/JWT_KEY --type SecureString --value '<production-signing-key-min-32-bytes>'
+
+aws ssm put-parameter --name /brewvio/ORIGIN_VERIFY --type String --value '<a-long-random-shared-secret>'
 ```
 
 Use `--overwrite` to update an existing parameter. Once set, you never touch them again for
 normal redeployments — the Lambda picks them up automatically on each cold start.
 
 > The Lambda's IAM role has least-privilege `ssm:GetParametersByPath` / `GetParameter` on
-> `/brewvio/*` plus `kms:Decrypt` scoped to the SSM service. This is wired up in `template.yaml`.
+> `/brewvio/*` plus `kms:Decrypt` scoped to the SSM service. This is wired up in `infra/template.yaml`.
 
 ---
 
@@ -109,8 +114,10 @@ dotnet test tests/
 cd tests; dotnet test
 ```
 
-Tests use a shared database per test class with per-test transaction rollbacks — fast and fully isolated. They never touch the dev database. Override the server with
-`BREWVIO_TEST_PG` (see §1).
+Integration tests use a shared database per test class with per-test transaction rollbacks — fast
+and fully isolated. They never touch the dev database. Override the server with
+`BREWVIO_TEST_PG` (see §1). The `tests/Unit/` suite runs against EF's in-memory provider (or pure
+in-process logic) and needs no Postgres at all.
 
 > The test harness provisions schema with `EnsureCreated()` rather than running migrations, so
 > the `EnableRowLevelSecurity` migration (§5) is not exercised here. RLS is validated directly
@@ -128,15 +135,18 @@ receipt → dashboard → inventory → menu performance → sign-up → manager
 
 Architecture: **CloudFront** (one domain) → S3 (static `wwwroot/`) + API Gateway **HTTP API** →
 **Lambda** (ASP.NET Core 10, arm64) → **Supabase Postgres** over SSL. No VPC/NAT/RDS Proxy needed.
+CloudFront also applies the security-headers policy and injects the `X-Origin-Verify` origin-lock
+secret, so the Lambda only trusts traffic that comes through CloudFront.
 
 ### 4a. Automated deploys (GitHub Actions — primary path)
 
-Push to `main` and the pipeline handles everything:
+Push to `master` and the pipeline handles everything:
 
 1. Runs the full test suite against a Postgres service container
-2. Deploys the Lambda + infrastructure via `dotnet lambda deploy-serverless`
-3. Syncs `src/wwwroot/` to S3 with correct cache headers
-4. Invalidates CloudFront
+2. Applies EF Core migrations to Supabase (session pooler, port 5432)
+3. Deploys the Lambda + infrastructure via `dotnet lambda deploy-serverless --template infra/template.yaml`
+4. Syncs `src/wwwroot/` to S3 with correct cache headers
+5. Invalidates CloudFront
 
 Authentication uses **OIDC** — no long-lived AWS keys are stored. GitHub mints a short-lived
 token per run, scoped to this repo and branch only.
@@ -168,10 +178,11 @@ aws cloudformation describe-stacks `
 | Secret | Value |
 |--------|-------|
 | `AWS_DEPLOY_ROLE_ARN` | ARN from step 2 |
+| `MIGRATION_CONNECTION_STRING` | Supabase session pooler (port 5432) for EF migrations |
 | `FRONTEND_BUCKET` | `brewvio-frontendbucket-15gnfq4gkjf0` |
 | `CLOUDFRONT_DISTRIBUTION_ID` | `E1CWDAT3NI1LSD` |
 
-After that, every push to `main` deploys automatically.
+After that, every push to `master` deploys automatically.
 
 ### 4b. Manual deploy (fallback)
 
@@ -185,23 +196,24 @@ Use this if you need to deploy outside of GitHub Actions.
 
 #### First-time setup: create SSM secrets (once only)
 
-Before the first deploy, create the two SSM parameters (see §1). After that, redeployments
+Before the first deploy, create the three SSM parameters (see §1). After that, redeployments
 **do not require touching SSM** — the Lambda reads them at cold start automatically.
 
 #### Deploy the API
 
-Run from the **project root** (where `template.yaml` lives), not from `src/`:
+Run from the **repo root** (the template lives in `infra/`):
 
 ```powershell
 dotnet lambda deploy-serverless `
-  --template template.yaml `
+  --template infra/template.yaml `
   --stack-name brewvio `
   --s3-bucket aws-sam-cli-managed-default-samclisourcebucket-xczut1dcayng `
   --region ap-southeast-2
 ```
 
-No secrets or keys are passed here. The deployed Lambda reads `/brewvio/DATABASE_URL` and
-`/brewvio/JWT_KEY` from SSM at startup. To use a different SSM path prefix:
+No secrets or keys are passed here. The deployed Lambda reads `/brewvio/DATABASE_URL`,
+`/brewvio/JWT_KEY`, and `/brewvio/ORIGIN_VERIFY` from SSM at startup. To use a different SSM path
+prefix:
 
 ```powershell
 # add to the command above:
@@ -211,7 +223,7 @@ No secrets or keys are passed here. The deployed Lambda reads `/brewvio/DATABASE
 Outputs after deploy:
 - `SiteUrl` — public CloudFront URL (frontend + `/api` on one domain)
 - `FrontendBucketName` — S3 bucket to upload the SPA into
-- `ApiEndpoint` — direct API Gateway URL (bypasses CloudFront, useful for testing)
+- `ApiEndpoint` — direct API Gateway URL (bypasses CloudFront; will 403 without `X-Origin-Verify`)
 
 #### Publish the frontend
 

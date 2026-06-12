@@ -256,6 +256,104 @@ public class OrderServiceExtendedTests(SharedTestDb fixture) : IClassFixture<Sha
             svc.AdvanceStatusAsync(receipt.TransactionId));  // already Completed → invalid
     }
 
+    // ── SetStatusAsync (manager free status override) ─────────────────────────
+
+    [Fact]
+    public async Task SetStatus_returns_null_for_missing_order()
+    {
+        using var t = fixture.Begin();
+        await DatabaseInitializer.SeedAllOriginalAsync(t.Db);
+        var (svc, _) = Build(t);
+
+        Assert.Null(await svc.SetStatusAsync(999_999, "Completed", null));
+    }
+
+    [Fact]
+    public async Task SetStatus_rejects_unknown_target_status()
+    {
+        using var t = fixture.Begin();
+        await DatabaseInitializer.SeedAllOriginalAsync(t.Db);
+        var (svc, db) = Build(t);
+        var latte = db.MenuItems.First(m => m.Name == "Caffe Latte");
+        var sale = await svc.CreateAsync(new CreateOrderRequest(Cart(latte.Id, 1), 0m,
+            new List<PaymentInput> { new("Cash", 200m) }));
+
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            svc.SetStatusAsync(sale.TransactionId, "Shipped", null));
+    }
+
+    [Fact]
+    public async Task SetStatus_changes_preparing_to_completed_without_touching_stock()
+    {
+        using var t = fixture.Begin();
+        await DatabaseInitializer.SeedAllOriginalAsync(t.Db);
+        var (svc, db) = Build(t);
+        var latte = db.MenuItems.First(m => m.Name == "Caffe Latte");
+        decimal Stock(string n) => t.NewContext().Ingredients.First(i => i.Name == n).StockLevel;
+
+        var sale = await svc.CreateAsync(new CreateOrderRequest(Cart(latte.Id, 1), 0m,
+            new List<PaymentInput> { new("Cash", 200m) }));
+        var afterSale = Stock("Whole Milk");
+
+        var summary = await svc.SetStatusAsync(sale.TransactionId, "Completed", null);
+
+        Assert.NotNull(summary);
+        Assert.Equal("Completed", summary!.Status);
+        Assert.Equal(afterSale, Stock("Whole Milk")); // plain status change → no stock movement
+    }
+
+    [Fact]
+    public async Task SetStatus_to_refunded_requires_a_reason()
+    {
+        using var t = fixture.Begin();
+        await DatabaseInitializer.SeedAllOriginalAsync(t.Db);
+        var (svc, db) = Build(t);
+        var latte = db.MenuItems.First(m => m.Name == "Caffe Latte");
+        var sale = await svc.CreateAsync(new CreateOrderRequest(Cart(latte.Id, 1), 0m,
+            new List<PaymentInput> { new("Cash", 200m) }));
+
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            svc.SetStatusAsync(sale.TransactionId, "Refunded", "   "));
+    }
+
+    [Fact]
+    public async Task SetStatus_to_refunded_restores_stock_and_records_reason()
+    {
+        using var t = fixture.Begin();
+        await DatabaseInitializer.SeedAllOriginalAsync(t.Db);
+        var (svc, db) = Build(t);
+        var latte = db.MenuItems.First(m => m.Name == "Caffe Latte");
+        decimal Stock(string n) => t.NewContext().Ingredients.First(i => i.Name == n).StockLevel;
+
+        var sale = await svc.CreateAsync(new CreateOrderRequest(Cart(latte.Id, 1), 0m,
+            new List<PaymentInput> { new("Cash", 200m) }));
+        var afterSale = Stock("Whole Milk");
+
+        var summary = await svc.SetStatusAsync(sale.TransactionId, "Refunded", "Wrong order");
+
+        Assert.NotNull(summary);
+        Assert.Equal("Refunded", summary!.Status);
+        Assert.Equal(afterSale + 200m, Stock("Whole Milk")); // stock restored, mirroring RefundAsync
+
+        using var verify = t.NewContext();
+        Assert.Equal("Wrong order", (await verify.Transactions.FindAsync(sale.TransactionId))!.Notes);
+    }
+
+    [Fact]
+    public async Task SetStatus_of_refunded_order_is_final_and_throws()
+    {
+        using var t = fixture.Begin();
+        await DatabaseInitializer.SeedAllOriginalAsync(t.Db);
+        var (svc, db) = Build(t);
+        var latte = db.MenuItems.First(m => m.Name == "Caffe Latte");
+        var sale = await svc.CreateAsync(new CreateOrderRequest(Cart(latte.Id, 1), 0m,
+            new List<PaymentInput> { new("Cash", 200m) }));
+        await svc.SetStatusAsync(sale.TransactionId, "Refunded", "Refund first");
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            svc.SetStatusAsync(sale.TransactionId, "Completed", null)); // Refunded is final
+    }
+
     // ── ActiveQueueCountAsync ─────────────────────────────────────────────────
 
     [Fact]

@@ -1,6 +1,8 @@
 using Brewvio.Dtos;
 using Brewvio.Helpers;
+using Brewvio.Models;
 using Brewvio.Services;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Brewvio.Controllers;
@@ -47,6 +49,12 @@ public class OrdersController(OrderService orders, SettingsService settings) : C
     [HttpPost("{id:int}/advance")]
     public async Task<IActionResult> Advance(int id, CancellationToken ct) =>
         await orders.AdvanceStatusAsync(id, ct) is { } r ? Ok(r) : NotFound();
+
+    // Manager-only free status override from Order History (Preparing/Completed/Refunded).
+    // A reason is required when the target is Refunded; that path also restores stock.
+    [HttpPost("{id:int}/status"), Authorize(Roles = Roles.Manager)]
+    public async Task<IActionResult> SetStatus(int id, SetStatusRequest req, CancellationToken ct) =>
+        await orders.SetStatusAsync(id, req.Status, req.Reason, ct) is { } r ? Ok(r) : NotFound();
 
     [HttpGet("queue/count")]
     public async Task<IActionResult> QueueCount(CancellationToken ct) => Ok(new { count = await orders.ActiveQueueCountAsync(ct) });

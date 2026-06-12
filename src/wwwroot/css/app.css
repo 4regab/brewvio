@@ -601,6 +601,18 @@ a:hover { color: var(--brew-blue-d); }
   height: 100dvh;
   overflow: hidden;
 }
+
+/* Left/menu column. Base (desktop): the sticky topbar overlaps this column, so we
+   pad the top by a full topbar height to clear it. The mobile override below resets
+   this — defined AFTER the base rule so it wins the cascade. */
+.pos-left {
+  padding: calc(var(--topbar-h) + .75rem) 1.25rem 1.25rem 1.25rem;
+  height: 100dvh;
+  min-width: 0;
+  display: flex; flex-direction: column;
+  overflow: hidden;
+}
+
 @media (max-width: 767px) {
   /* Single-column layout — menu fills viewport, cart is a bottom sheet */
   .pos-layout {
@@ -615,9 +627,11 @@ a:hover { color: var(--brew-blue-d); }
     width: 100%;
   }
 
-  /* Left column scrolls naturally */
+  /* Left column scrolls naturally. The topbar is sticky and IN-FLOW on mobile
+     (content already starts below it), so we only need a small breathing space —
+     not another full topbar-height of padding, which previously left a large gap. */
   .pos-left {
-    padding-top: calc(var(--topbar-h) + .5rem);
+    padding-top: .75rem;
     padding-bottom: calc(90px + env(safe-area-inset-bottom, 0px));
     height: auto;
     overflow: visible;
@@ -661,14 +675,6 @@ a:hover { color: var(--brew-blue-d); }
   .cart-fab {
     display: flex !important;
   }
-}
-
-.pos-left {
-  padding: calc(var(--topbar-h) + .75rem) 1.25rem 1.25rem 1.25rem;
-  height: 100dvh;
-  min-width: 0;
-  display: flex; flex-direction: column;
-  overflow: hidden;
 }
 
 /* Two-column layout: vertical category rail on the left, menu column on the right */
@@ -996,6 +1002,16 @@ a:hover { color: var(--brew-blue-d); }
   box-shadow: 0 0 0 3px rgba(90,61,33,.08);
 }
 .cart-actions .pay-method-select:disabled { opacity: .45; cursor: not-allowed; }
+
+/* Manager status dropdown in Order History (compact, pill-styled, content-width) */
+.order-status-select {
+  width: auto;
+  min-width: 8.5rem;
+  display: inline-block;
+  border-radius: 999px;
+  font-weight: 600;
+  font-size: .78rem;
+}
 
 /* Place Order / Confirm â€” ALWAYS ESPRESSO (global + cart-scoped) */
 .btn-complete {

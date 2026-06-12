@@ -46,8 +46,9 @@ brewvio/
 │   │   ├── AuditController.cs
 │   │   └── HealthController.cs
 │   ├── Data/
-│   │   ├── BrewvioDbContext.cs    # EF Core DbContext — all DbSets, model config, precision, FKs
-│   │   └── DatabaseInitializer.cs# Startup seeder + --seed-sales / --force-seed-sales CLI modes
+│   │   ├── BrewvioDbContext.cs        # EF Core DbContext — all DbSets, model config, precision, FKs
+│   │   ├── BrewvioDbContextFactory.cs # Design-time factory for `dotnet ef` tooling
+│   │   └── DatabaseInitializer.cs     # Startup seeder + --seed-sales / --force-seed-sales CLI modes
 │   ├── Dtos/                     # Request/response record types (no business logic)
 │   │   ├── AuthDtos.cs
 │   │   ├── UserDtos.cs
@@ -60,9 +61,11 @@ brewvio/
 │   ├── Helpers/
 │   │   ├── CurrentUser.cs        # Resolves JWT claims → (Id, Username, Role)
 │   │   ├── ExportHelper.cs       # CSV (ClosedXML), PDF (QuestPDF) generation
-│   │   └── PasswordHasher.cs     # PBKDF2-SHA512, 600k iterations, upgrade-on-login
+│   │   ├── NoHtmlAttribute.cs    # Validation attribute rejecting HTML/script in free-text fields
+│   │   └── PasswordHasher.cs     # PBKDF2-SHA256, 600k iterations, upgrade-on-login
 │   ├── Migrations/               # EF Core migration files (do not hand-edit)
 │   ├── Models/                   # Domain entities
+│   │   ├── AppSetting.cs         # Key/value store row
 │   │   ├── AuditLog.cs
 │   │   ├── Discount.cs           # Abstract + FixedAmountDiscount + PercentDiscount
 │   │   ├── Ingredient.cs
@@ -70,15 +73,14 @@ brewvio/
 │   │   ├── Modifier.cs
 │   │   ├── Payment.cs
 │   │   ├── RecipeIngredient.cs
-│   │   ├── Roles.cs              # static string constants
+│   │   ├── Role.cs               # static `Roles` string constants
 │   │   ├── Transaction.cs
 │   │   ├── TransactionItem.cs
-│   │   ├── User.cs
-│   │   └── UserStatus.cs         # static string constants
+│   │   └── User.cs               # User entity + static `UserStatus` string constants
 │   ├── Services/                 # All business logic lives here
 │   │   ├── AuthService.cs
 │   │   ├── AuditService.cs
-│   │   ├── CurrentUser.cs
+│   │   ├── InsufficientStockException.cs
 │   │   ├── InventoryService.cs
 │   │   ├── MenuService.cs
 │   │   ├── OrderService.cs
@@ -101,7 +103,7 @@ brewvio/
 │   ├── appsettings.json          # Default connection string (localhost:5433)
 │   ├── appsettings.Development.json
 │   ├── appsettings.Development.local.json  # Gitignored — real Supabase URL + JWT key
-│   ├── Program.cs                # DI wiring, middleware, auth, Lambda hosting
+│   ├── Program.cs                # DI wiring, middleware, auth, origin lock, Lambda hosting
 │   └── Brewvio.csproj
 ├── tests/
 │   ├── AuthServiceTests.cs
@@ -119,12 +121,27 @@ brewvio/
 │   ├── SettingsServiceExtendedTests.cs
 │   ├── UserServiceTests.cs
 │   ├── UserServiceExtendedTests.cs
+│   ├── Unit/                     # Pure unit tests (in-memory / no Postgres required)
+│   │   ├── BucketKeyTests.cs
+│   │   ├── BuildLineItemsTests.cs
+│   │   ├── CashierDisplayNameTests.cs
+│   │   ├── MaxDiscountPercentTests.cs
+│   │   ├── NoHtmlAttributeTests.cs
+│   │   └── PasswordHasherTests.cs
 │   ├── TestSupport.cs            # SharedTestDb, TestScope, TestDb, TestSupport helpers
+│   ├── TestInit.cs               # Module initializer — disables tax-rate cache for test isolation
 │   └── Brewvio.Tests.csproj
 ├── docs/
-│   └── README.md                 # ← this file
-├── template.yaml                 # AWS SAM — Lambda, API Gateway, S3, CloudFront
-└── samconfig.toml                # SAM deploy defaults (generated after first guided deploy)
+│   ├── DOCS.md                   # ← this file (full developer reference)
+│   └── DEPLOYMENT.md             # Environment, local dev & deployment guide
+├── infra/
+│   ├── template.yaml             # AWS SAM — Lambda, API Gateway, S3, CloudFront, security headers
+│   ├── github-oidc-role.yaml     # GitHub Actions OIDC deploy role
+│   └── cloudtrail.yaml           # CloudTrail audit trail for management-plane events
+├── .github/workflows/
+│   └── deploy.yml                # CI/CD: test → migrate → deploy on push to master
+├── Brewvio.sln
+└── README.md
 ```
 
 ---
@@ -140,10 +157,12 @@ CloudFront Distribution (d37i8pbdtw6xf4.cloudfront.net)
   └── /*      → S3 Bucket (static frontend — index.html + JS/CSS/img)
 ```
 
-- **Lambda** runs the entire ASP.NET Core app via `Amazon.Lambda.AspNetCoreServer.Hosting`. Cold starts are ~1–3 s on arm64 / 1769 MB (2 vCPUs allocated).
+- **Lambda** runs the entire ASP.NET Core app via `Amazon.Lambda.AspNetCoreServer.Hosting`. Cold starts are ~1–3 s on arm64 / 1769 MB (2 vCPUs allocated). Concurrency is capped at 10 (`ReservedConcurrentExecutions`) so a spike can't exhaust the account-wide Lambda pool.
 - **Supabase** provides managed Postgres. The app connects through the **Supavisor transaction pooler** (port 6543) with `MaxAutoPrepare=0` and client-side connection pooling disabled (connections go stale in frozen Lambda processes).
 - **Optimistic concurrency** on `Ingredient.StockLevel` uses PostgreSQL's `xmin` system column so concurrent orders can't silently oversell stock.
 - **Secrets** (`DATABASE_URL`, `JWT_KEY`) are stored in **AWS SSM Parameter Store** as SecureString and loaded at Lambda cold-start via `Amazon.Extensions.Configuration.SystemsManager`.
+- **Origin lock.** CloudFront injects a shared secret (`X-Origin-Verify`) on every request to the API origin; the Lambda rejects any request missing or mismatching it with `403`, forcing all traffic through CloudFront. The secret is the plaintext SSM **String** parameter `/brewvio/ORIGIN_VERIFY` (CloudFront cannot read SecureString dynamic references). Locally the value is unset, so the check is skipped.
+- **Security headers** (HSTS, CSP, X-Frame-Options DENY, X-Content-Type-Options, Referrer-Policy, Permissions-Policy) are applied by a CloudFront `ResponseHeadersPolicy` defined in `infra/template.yaml`.
 
 ---
 
@@ -217,6 +236,7 @@ dotnet run --project src/Brewvio.csproj -- --force-seed-sales
 |---|---|---|
 | `DATABASE_URL` | SSM / local JSON | Supabase pooler URL: `postgresql://user:pass@host:port/db` |
 | `JWT_KEY` | SSM / local JSON | HMAC-SHA256 signing key, minimum 32 bytes |
+| `ORIGIN_VERIFY` | SSM (String) | Origin-lock shared secret CloudFront injects as `X-Origin-Verify`; unset locally |
 | `SSM_PARAMETER_PATH` | Lambda env var | SSM path prefix, default `/brewvio` |
 | `BREWVIO_TEST_PG` | Shell / CI | Override test Postgres, default `Host=localhost;Port=5433;...` |
 | `ASPNETCORE_ENVIRONMENT` | Shell | `Development` enables `appsettings.Development*.json` |
@@ -264,13 +284,17 @@ dotnet run --project src/Brewvio.csproj -- --force-seed-sales
 ### Flow
 
 1. Client POSTs `{ username, password }` to `/api/auth/login`.
-2. Server verifies PBKDF2-SHA512 hash (600k iterations). On success, issues a signed JWT (8-hour expiry).
+2. Server verifies PBKDF2-SHA256 hash (600k iterations). On success, issues a signed JWT (2-hour expiry).
 3. Client stores the JWT in `localStorage` and sends it as `Authorization: Bearer <token>` on every request.
 4. ASP.NET Core validates the token via `JwtBearer` middleware. The fallback authorization policy requires authentication on all endpoints unless `[AllowAnonymous]` is present.
 
 ### Password hashing
 
-PBKDF2-SHA512, 600k iterations, 16-byte salt, 32-byte hash. On successful login with an old iteration count the hash is transparently upgraded.
+PBKDF2-SHA256, 600k iterations, 16-byte salt, 32-byte hash. Stored as `iterations.salt.hash`. Legacy 2-part `salt.hash` hashes (100k iterations) are still accepted, and on successful login an old iteration count is transparently upgraded to the current one.
+
+### Token revocation
+
+Each `User` carries a `TokenIssuedAt` watermark. After the JWT bearer middleware validates a token, a small middleware in `Program.cs` checks that the token's `iat` (issued-at) is not older than the watermark and that the user is still Active. Deactivating an account, rejecting it, or resetting a password bumps `TokenIssuedAt`, immediately invalidating every previously issued token without waiting for the 2-hour expiry.
 
 ### Roles
 
@@ -287,6 +311,7 @@ PBKDF2-SHA512, 600k iterations, 16-byte salt, 32-byte hash. On successful login 
 | `name` | Username |
 | `fullname` | Full name |
 | `role` | `Manager` or `Cashier` |
+| `iat` | Issued-at (Unix seconds) — used by the revocation check |
 
 ---
 
@@ -931,11 +956,12 @@ Public. Used by CloudFront/load balancers.
 | `Id` | int | PK |
 | `Username` | string | Unique index |
 | `FullName` | string | |
-| `PasswordHash` | string | PBKDF2-SHA512 |
+| `PasswordHash` | string | PBKDF2-SHA256 |
 | `Role` | string | `Manager` or `Cashier` |
 | `IsActive` | bool | Gate for login |
 | `Status` | string | `Pending`, `Active`, `Rejected` |
 | `CreatedAt` | DateTime | UTC |
+| `TokenIssuedAt` | DateTime? | Watermark for JWT revocation (see §6) |
 
 ### Ingredient
 
@@ -1022,8 +1048,7 @@ decimal Apply(decimal subtotal)  // returns [0, subtotal], rounded to 2dp
 
 ### AuthService
 
-Handles login (PBKDF2 verify → JWT issue), self-service registration (Pending), and account status polling.  
-Transparently re-hashes passwords with the current iteration count on successful login.
+Handles login (PBKDF2 verify → JWT issue), self-service registration (Pending), and account status polling. Issues HMAC-SHA256 JWTs with a 2-hour expiry and records `TokenIssuedAt` on each login. Transparently re-hashes passwords with the current iteration count on successful login.
 
 ### UserService
 
@@ -1035,7 +1060,7 @@ Menu item and modifier management. Computes `cost` from ingredient unit costs ×
 
 ### OrderService
 
-Core POS engine. Builds line items, applies `Discount` polymorphically, calculates tax, validates payment, deducts stock with optimistic-concurrency retry (up to 5 attempts on `DbUpdateConcurrencyException`). Manages Draft lifecycle.
+Core POS engine. Builds line items, applies `Discount` polymorphically, calculates tax, validates payment, deducts stock with optimistic-concurrency retry (up to 5 attempts on `DbUpdateConcurrencyException`). Throws `InsufficientStockException` when an order can't be fulfilled. Manages Draft lifecycle.
 
 ### InventoryService
 
@@ -1047,7 +1072,7 @@ Aggregates `Completed` transactions over a date range. Groups trend data by `dai
 
 ### SettingsService
 
-Key/value store for `StoreName`, `Address`, `Currency`, `TaxRatePercent`. Includes a 5-minute in-process cache for `GetTaxRateAsync` to avoid a DB round-trip on every order. JSON backup export.
+Key/value store for `StoreName`, `Address`, `Currency`, `TaxRatePercent`. Includes a 5-minute in-process cache for `GetTaxRateAsync` to avoid a DB round-trip on every order (disabled in tests via `TestInit`). Also resolves `GetMaxDiscountPercentAsync` (the clamped discount cap). JSON backup export.
 
 ### AuditService
 
@@ -1131,16 +1156,18 @@ dotnet test tests/Brewvio.Tests.csproj
 
 ### Test isolation strategy
 
-Each test class uses `IClassFixture<SharedTestDb>`:
+The integration test classes use `IClassFixture<SharedTestDb>`:
 
 1. `SharedTestDb.InitializeAsync()` creates a real Postgres database once per class (schema via `EnsureCreatedAsync`).
 2. `fixture.Begin()` returns a `TestScope` that opens a `NpgsqlConnection`, begins a real `NpgsqlTransaction`, and hands it to EF via `UseTransaction()`.
 3. On `TestScope.Dispose()` the transaction is rolled back — no data leaks, no DROP/CREATE overhead.
 4. `t.NewContext()` opens a second EF context on the same underlying connection+transaction to bypass EF's first-level cache for assertion reads.
 
-The concurrency test uses the legacy `TestDb` (creates and drops an isolated DB) because it genuinely needs two independent connections.
+The concurrency test uses the legacy `TestDb` (creates and drops an isolated DB) because it genuinely needs two independent connections. `TestInit` (a module initializer) disables the `SettingsService` tax-rate cache for the whole assembly so the process-global cache can't leak across parallel test classes.
 
-### Test coverage summary
+The `tests/Unit/` suite needs no Postgres — those tests run against EF's in-memory provider or pure in-process logic.
+
+### Integration test coverage (real Postgres)
 
 | File | Tests | Covers |
 |---|---|---|
@@ -1159,30 +1186,55 @@ The concurrency test uses the legacy `TestDb` (creates and drops an isolated DB)
 | `SettingsServiceExtendedTests` | 10 | Empty DB defaults, non-numeric tax, backup completeness |
 | `UserServiceTests` | 11 | Approve, reject, create, update, reset password |
 | `UserServiceExtendedTests` | 15 | ListAsync, delete, null paths, status sync, boundary checks |
-| **Total** | **187** | |
+| **Integration subtotal** | **187** | |
+
+### Unit test coverage (`tests/Unit/`, no Postgres)
+
+| File | Tests | Covers |
+|---|---|---|
+| `BucketKeyTests` | 13 | Reporting trend bucket keys: daily/weekly/monthly/yearly, ISO-week boundaries |
+| `BuildLineItemsTests` | 10 | Line-item building: quantity guards, inactive/missing items, modifier deltas, subtotal |
+| `CashierDisplayNameTests` | 4 | Cashier display-name fallback (FullName → Username) |
+| `MaxDiscountPercentTests` | 10 | Discount-cap clamping (0–100), fallback default, non-numeric handling |
+| `NoHtmlAttributeTests` | 11 | `NoHtmlAttribute` validation: HTML tags, dangerous keywords, borderline cases |
+| `PasswordHasherTests` | 15 | Hash/verify roundtrip, legacy format, malformed input, NeedsRehash |
+| **Unit subtotal** | **63** | |
+
+**Total: 250 test methods.** Several `[Theory]` cases expand into multiple `[InlineData]` rows, so the count reported by `dotnet test` is higher (≈277 individual test cases).
 
 ---
 
 ## 12. Deployment
 
+Primary deploys run through GitHub Actions (`.github/workflows/deploy.yml`) on push to `master`: it runs the test suite, applies EF migrations, deploys the Lambda + infrastructure with `dotnet lambda deploy-serverless`, syncs the frontend to S3, and invalidates CloudFront. See [`DEPLOYMENT.md`](./DEPLOYMENT.md) for first-time setup, secrets, and manual deploy steps.
+
 ### Stack
 
-Defined in `template.yaml` (AWS SAM):
+Defined in `infra/template.yaml` (AWS SAM):
 
 | Resource | Type | Notes |
 |---|---|---|
-| `BrewvioFunction` | `AWS::Serverless::Function` | arm64, .NET 10, 1769 MB (2 vCPUs), 60s timeout |
+| `BrewvioFunction` | `AWS::Serverless::Function` | arm64, .NET 10, 1769 MB (2 vCPUs), 60s timeout, `ReservedConcurrentExecutions: 10` |
 | `Api` | `AWS::Serverless::HttpApi` | Throttle: 50 burst / 100 rps |
-| `BrewvioFunctionLogGroup` | `AWS::Logs::LogGroup` | Lambda log group; 1-day retention to minimize CloudWatch cost |
-| `FrontendBucket` | `AWS::S3::Bucket` | Private; CloudFront OAC access only |
-| `Distribution` | `AWS::CloudFront::Distribution` | Single domain: `/api/*` → Lambda, `/*` → S3 |
+| `BrewvioFunctionLogGroup` | `AWS::Logs::LogGroup` | Lambda log group; 90-day retention (within CloudWatch free tier at this usage) |
+| `FrontendBucket` | `AWS::S3::Bucket` | Private; CloudFront OAC access only; versioned with lifecycle cleanup |
+| `FrontendOac` | `AWS::CloudFront::OriginAccessControl` | Signs CloudFront → S3 requests (sigv4) |
+| `SecurityHeadersPolicy` | `AWS::CloudFront::ResponseHeadersPolicy` | HSTS, CSP, X-Frame-Options DENY, nosniff, Referrer-Policy, Permissions-Policy |
+| `Distribution` | `AWS::CloudFront::Distribution` | Single domain: `/api/*` → Lambda (with `X-Origin-Verify`), `/*` → S3 |
 
-### Deploy backend + infrastructure
+### Deploy backend + infrastructure (manual)
+
+Run from the **repo root** (the template lives in `infra/`):
 
 ```bash
-sam build
-sam deploy --stack-name brewvio --resolve-s3 --capabilities CAPABILITY_IAM --no-confirm-changeset
+dotnet lambda deploy-serverless \
+  --template infra/template.yaml \
+  --stack-name brewvio \
+  --s3-bucket <sam-managed-source-bucket> \
+  --region ap-southeast-2
 ```
+
+No secrets are passed on the command line — the Lambda reads them from SSM at cold start.
 
 ### Deploy frontend only
 
@@ -1202,7 +1254,7 @@ aws cloudfront create-invalidation --distribution-id <id> --paths "/*"
 
 ### Secrets (SSM Parameter Store)
 
-Create these as `SecureString` before first deploy:
+Create `DATABASE_URL` and `JWT_KEY` as `SecureString`, and `ORIGIN_VERIFY` as a plaintext `String` (CloudFront cannot read SecureString dynamic references), before the first deploy:
 
 ```bash
 aws ssm put-parameter --name /brewvio/DATABASE_URL --type SecureString \
@@ -1210,6 +1262,9 @@ aws ssm put-parameter --name /brewvio/DATABASE_URL --type SecureString \
 
 aws ssm put-parameter --name /brewvio/JWT_KEY --type SecureString \
   --value "your-minimum-32-byte-signing-key"
+
+aws ssm put-parameter --name /brewvio/ORIGIN_VERIFY --type String \
+  --value "a-long-random-shared-secret"
 ```
 
 ### Live URLs

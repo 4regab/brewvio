@@ -137,7 +137,18 @@ public class OrderService(BrewvioDbContext db, CurrentUser current, AuditService
 
         tx.Status = "Refunded";
         tx.Notes = reason;
-        // Restock ingredients from the current recipes of the sold items.
+        await RestoreStockAsync(tx, ct);   // restock ingredients from the sold items' current recipes
+
+        audit.Add("OrderRefunded", $"Txn #{tx.Id} ({tx.TotalAmount:0.00}) refunded. Reason: {reason}");
+        await db.SaveChangesAsync(ct);
+        return ToReceipt(tx, current.Username, 0, 0, new List<string>());
+    }
+
+    // Restocks ingredients for a transaction by re-adding the recipe quantities of its sold
+    // items. Shared by RefundAsync and the manager status override (→ Refunded). The caller is
+    // responsible for SaveChangesAsync; tx.Items must be loaded.
+    private async Task RestoreStockAsync(Transaction tx, CancellationToken ct)
+    {
         var menuIds = tx.Items.Select(i => i.MenuItemId).Distinct().ToList();
         var recipeLines = await db.RecipeIngredients.Where(r => menuIds.Contains(r.MenuItemId)).ToListAsync(ct);
         var ingIds = recipeLines.Select(r => r.IngredientId).Distinct().ToList();
@@ -145,10 +156,6 @@ public class OrderService(BrewvioDbContext db, CurrentUser current, AuditService
         foreach (var item in tx.Items)
             foreach (var rl in recipeLines.Where(r => r.MenuItemId == item.MenuItemId))
                 if (ingById.TryGetValue(rl.IngredientId, out var ing)) ing.StockLevel += rl.Quantity * item.Quantity;
-
-        audit.Add("OrderRefunded", $"Txn #{tx.Id} ({tx.TotalAmount:0.00}) refunded. Reason: {reason}");
-        await db.SaveChangesAsync(ct);
-        return ToReceipt(tx, current.Username, 0, 0, new List<string>());
     }
 
     // Pre-payment cancellation: only the audited reason is persisted (cart cleared client-side).
@@ -286,6 +293,53 @@ public class OrderService(BrewvioDbContext db, CurrentUser current, AuditService
         var itemSummary = string.Join(", ", items.Select(i => i.Quantity > 1 ? $"{i.Quantity}x {i.ItemName}" : i.ItemName));
         var name = tx.Cashier.FullName != "" ? tx.Cashier.FullName : tx.Cashier.Username;
         return new TransactionSummaryDto(tx.Id, tx.Timestamp, tx.TotalAmount, tx.PaymentMethod, tx.Status, name, items.Count, itemSummary);
+    }
+
+    // Statuses a manager may set directly from Order History. "Draft"/"Pending" are not valid
+    // targets (drafts live in their own tab; Pending is a legacy inbound-only state).
+    private static readonly HashSet<string> ManagerSettableStatuses = new() { "Preparing", "Completed", "Refunded" };
+
+    // Manager-only free status override. Preparing/Completed are plain status changes with no
+    // stock effect — ingredients are deducted at sale time and stay deducted while the order is
+    // active. Moving to Refunded requires a reason and restores stock, mirroring RefundAsync.
+    // A Refunded order is final (cannot be moved out of); Drafts cannot be changed here.
+    public async Task<TransactionSummaryDto?> SetStatusAsync(int id, string targetStatus, string? reason, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(targetStatus) || !ManagerSettableStatuses.Contains(targetStatus))
+            throw new ArgumentException($"'{targetStatus}' is not a settable order status.");
+
+        var tx = await db.Transactions.Include(t => t.Items).Include(t => t.Cashier)
+            .FirstOrDefaultAsync(t => t.Id == id, ct);
+        if (tx is null) return null;
+
+        if (tx.Status == "Draft")
+            throw new InvalidOperationException("Draft orders cannot be changed here; use the Drafts tab.");
+        if (tx.Status == "Refunded")
+            throw new InvalidOperationException("Refunded orders are final and cannot be changed.");
+
+        if (tx.Status != targetStatus)
+        {
+            if (targetStatus == "Refunded")
+            {
+                if (string.IsNullOrWhiteSpace(reason))
+                    throw new ArgumentException("A reason is required to refund an order.");
+                await RestoreStockAsync(tx, ct);
+                tx.Notes = reason;
+                tx.Status = "Refunded";
+                audit.Add("OrderRefunded", $"Txn #{tx.Id} ({tx.TotalAmount:0.00}) refunded via status change. Reason: {reason}");
+            }
+            else
+            {
+                var from = tx.Status;
+                tx.Status = targetStatus;
+                audit.Add("OrderStatusChanged", $"Txn #{tx.Id} status changed from {from} to {targetStatus}.");
+            }
+            await db.SaveChangesAsync(ct);
+        }
+
+        var name2 = tx.Cashier.FullName != "" ? tx.Cashier.FullName : tx.Cashier.Username;
+        var itemSummary2 = string.Join(", ", tx.Items.Select(i => i.Quantity > 1 ? $"{i.Quantity}x {i.ItemName}" : i.ItemName));
+        return new TransactionSummaryDto(tx.Id, tx.Timestamp, tx.TotalAmount, tx.PaymentMethod, tx.Status, name2, tx.Items.Count, itemSummary2);
     }
 
     public async Task<int> ActiveQueueCountAsync(CancellationToken ct = default) =>

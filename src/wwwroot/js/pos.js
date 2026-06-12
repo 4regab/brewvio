@@ -305,7 +305,8 @@ window.Views = window.Views || {};
   function openPayment() {
     if (!cart.length) return; // guard: don't open if cart was cleared
     const t = totals();
-    let method = 'Cash';
+    // Seed the modal from the cart's payment-method selector so a GCash choice carries over.
+    let method = (payMethodBtn && payMethodBtn.value) || 'Cash';
     const cashIn = el('input', { type: 'number', min: '0', step: '0.01', class: 'form-control form-control-lg', value: t.total.toFixed(2) });
     const changeRow = el('div', { class: 'd-flex justify-content-between fs-5 mt-3' },
       el('span', { text: 'Change' }), el('span', { class: 'fw-bold change-val', text: money(0) }));
@@ -329,11 +330,13 @@ window.Views = window.Views || {};
     [
       { key: 'Cash', label: '<i class="bi bi-cash-coin"></i> Cash' },
       { key: 'GCash', label: '<i class="bi bi-phone"></i> GCash' },
-    ].forEach((m, i) => seg.appendChild(el('button', {
-      class: 'btn ' + (i === 0 ? 'btn-primary' : 'btn-outline-secondary'),
+    ].forEach((m) => seg.appendChild(el('button', {
+      class: 'btn ' + (m.key === method ? 'btn-primary' : 'btn-outline-secondary'),
       html: m.label, dataset: { method: m.key },
       onClick: () => setMethod(m.key),
     })));
+    // Sync label/highlight to the seeded method (e.g. GCash chosen in the cart).
+    setMethod(method);
 
     const confirm = button('Confirm payment', 'btn-complete btn-lg w-100', async () => {
       const tendered = Number(cashIn.value) || 0;
@@ -835,17 +838,52 @@ window.Views = window.Views || {};
           return true;
         });
         const badge = (s) => `<span class="badge ${s === 'Completed' ? 'badge-soft-success' : s === 'Refunded' ? 'badge-soft-danger' : s === 'Preparing' ? 'badge-soft-warning' : s === 'Pending' ? 'badge-soft-info' : 'badge-soft-muted'}">${esc(s)}</span>`;
+        // Managers can freely change an order's status from history (Preparing/Completed/Refunded).
+        // Refunded is final and Drafts aren't editable here, so the dropdown is only offered for
+        // active/completed orders. Cashiers keep the existing single-action Refund button.
+        const isManager = window.App.state.user && window.App.state.user.role === 'Manager';
+        const isChangeable = (s) => s === 'Pending' || s === 'Preparing' || s === 'Completed';
+
+        function statusSelect(tx) {
+          const sel = el('select', { class: 'form-select form-select-sm order-status-select', 'aria-label': 'Change status for order #' + tx.id });
+          const opts = ['Preparing', 'Completed', 'Refunded'];
+          if (!opts.includes(tx.status)) opts.unshift(tx.status); // surface legacy 'Pending' as the current value
+          opts.forEach((s) => sel.appendChild(el('option', { value: s, text: s, selected: s === tx.status })));
+          sel.addEventListener('change', async () => {
+            const target = sel.value;
+            if (target === tx.status) return;
+            let reason = null;
+            if (target === 'Refunded') {
+              reason = await promptReason({ title: 'Refund #' + tx.id, label: 'Reason for refund', confirmText: 'Refund', confirmClass: 'btn-danger' });
+              if (reason == null) { sel.value = tx.status; return; } // cancelled — revert selection
+            }
+            sel.disabled = true;
+            try {
+              await Api.post(`/api/orders/${tx.id}/status`, { status: target, reason });
+              if (target === 'Refunded') { Api.bustCache('/api/inventory'); Api.bustCache('/api/menu'); toast('Refunded. Stock restored.', 'success'); }
+              else toast('Order #' + tx.id + ' set to ' + target + '.', 'success');
+              renderHistory();
+            } catch (e) {
+              toast(e.message, 'danger');
+              sel.value = tx.status; sel.disabled = false; // revert on failure
+            }
+          });
+          return sel;
+        }
+
         const tbody = el('tbody');
         if (!filtered.length) tbody.appendChild(el('tr', {}, el('td', { colspan: 7 }, empty('bi-receipt', 'No transactions yet.'))));
         filtered.forEach((tx) => {
-          const actions = el('div', { class: 'd-flex gap-2 justify-content-end' },
+          const actions = el('div', { class: 'd-flex gap-2 justify-content-end align-items-center' },
             button('Detail', 'btn-sm btn-light', async () => { try { showReceipt(await Api.get('/api/orders/' + tx.id)); } catch (e) { toast(e.message, 'danger'); } }),
-            tx.status === 'Completed' ? button('Refund', 'btn-sm btn-outline-danger', async () => {
-              const reason = await promptReason({ title: 'Refund #' + tx.id, label: 'Reason for refund', confirmText: 'Refund', confirmClass: 'btn-danger' });
-              if (reason == null) return;
-              try { await Api.post(`/api/orders/${tx.id}/refund`, { reason }); Api.bustCache('/api/inventory'); Api.bustCache('/api/menu'); toast('Refunded. Stock restored.'); renderHistory(); }
-              catch (e) { toast(e.message, 'danger'); }
-            }) : null);
+            isManager
+              ? (isChangeable(tx.status) ? statusSelect(tx) : null)
+              : (tx.status === 'Completed' ? button('Refund', 'btn-sm btn-outline-danger', async () => {
+                  const reason = await promptReason({ title: 'Refund #' + tx.id, label: 'Reason for refund', confirmText: 'Refund', confirmClass: 'btn-danger' });
+                  if (reason == null) return;
+                  try { await Api.post(`/api/orders/${tx.id}/refund`, { reason }); Api.bustCache('/api/inventory'); Api.bustCache('/api/menu'); toast('Refunded. Stock restored.'); renderHistory(); }
+                  catch (e) { toast(e.message, 'danger'); }
+                }) : null));
           tbody.appendChild(el('tr', {},
             el('td', { text: '#' + String(tx.id).padStart(3, '0') }),
             el('td', { text: dateTime(tx.timestamp) }),
