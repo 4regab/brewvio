@@ -33,7 +33,10 @@ Resources:
     Properties:
       FunctionName:
         Fn::Sub: ${AWS::StackName}-api
-      CodeUri: src
+      # CodeUri is resolved by Amazon.Lambda.Tools relative to THIS template's
+      # directory (infra/), not the working directory. The project lives at the
+      # repo-root src/, so go up one level.
+      CodeUri: ../src
       Handler: Brewvio
       Environment:
         Variables:
