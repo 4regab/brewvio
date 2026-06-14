@@ -55,6 +55,35 @@ public static class ExportHelper
         return Utf8(sb.ToString());
     }
 
+    // Friendly label for a stock-movement action code (matches the UI badges).
+    private static string MovementTypeLabel(string action) => action switch
+    {
+        "StockIn" => "Stock In",
+        "StockOut" => "Stock Out",
+        "InventoryAdjust" => "Adjust",
+        "StockSale" => "Sale",
+        "StockRefund" => "Refund",
+        _ => action
+    };
+
+    public static byte[] StockMovementsCsv(IEnumerable<StockMovementDto> rows)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine("sep=,");
+        sb.AppendLine("\"Timestamp (UTC)\",\"Item Code\",\"Item\",\"Type\",\"Quantity\",\"Balance After\",\"User\",\"Details\"");
+        foreach (var m in rows)
+            sb.AppendLine(string.Join(",",
+                $"\"{m.Timestamp:yyyy-MM-dd HH:mm:ss}\"",
+                $"\"{F(m.IngredientCode)}\"",
+                $"\"{F(m.IngredientName)}\"",
+                $"\"{F(MovementTypeLabel(m.Action))}\"",
+                m.Quantity?.ToString("0.###") ?? "",
+                m.BalanceAfter?.ToString("0.###") ?? "",
+                $"\"{F(m.Username)}\"",
+                $"\"{F(m.Details)}\""));
+        return Utf8(sb.ToString());
+    }
+
     public static byte[] OrdersXlsx(IEnumerable<TransactionSummaryDto> orders)
     {
         using var wb = new XLWorkbook();

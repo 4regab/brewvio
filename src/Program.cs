@@ -50,12 +50,12 @@ if (!string.IsNullOrEmpty(databaseUrl))
         // Supabase Supavisor transaction pooler does not support server-side prepared
         // statements; disabling them prevents "Timeout during reading attempt" hangs on writes.
         MaxAutoPrepare = 0,
-        // Disable Npgsql's CLIENT-side pool. On Lambda the process is frozen between invocations,
-        // so a pooled connection goes stale (Supavisor reclaims the server side) and the next
-        // query hangs until CommandTimeout -> "Timeout during reading attempt" 22s stalls. Supavisor
-        // IS the connection pool, so each invocation opening a fresh connection to it is the intended
-        // serverless pattern and removes the stale-socket hang entirely.
-        Pooling = false,
+        // Disable Npgsql's CLIENT-side pool ONLY on Lambda: the process is frozen between
+        // invocations, so a pooled connection goes stale (Supavisor reclaims the server side) and
+        // the next query hangs until CommandTimeout. Locally (long-running Kestrel) the OPPOSITE is
+        // true — without pooling every query opens a fresh TLS connection to the remote DB and the
+        // app crawls, so we keep the pool ON for non-Lambda hosts.
+        Pooling = string.IsNullOrEmpty(Environment.GetEnvironmentVariable("AWS_LAMBDA_FUNCTION_NAME")),
         // Fail fast on a stalled pooler connection so a bad connect surfaces quickly
         // instead of hanging the synchronous request (the retry policy below adds bounded retries).
         Timeout = 8,

@@ -41,6 +41,20 @@ window.Views = window.Views || {};
   const card = (...kids) => el('div', { class: 'section-card p-0' }, ...kids);
   const tableWrap = (head, tbody) => el('div', { class: 'table-responsive' }, el('table', { class: 'table align-middle mb-0' },
     el('thead', {}, el('tr', {}, ...head.map((h) => el('th', { class: h.end ? 'text-end' : '', text: h.t })))), tbody));
+
+  // ---- Stock-movement shared helpers (used by the inventory History modal + Stock Movements page) ----
+  const MOVE_LABELS = {
+    StockIn: ['Stock In', 'badge-soft-success'], StockOut: ['Stock Out', 'badge-soft-danger'],
+    InventoryAdjust: ['Adjust', 'badge-soft-warning'], StockSale: ['Sale', 'badge-soft-muted'],
+    StockRefund: ['Refund', 'badge-soft-success'],
+  };
+  const moveTypeBadge = (action) => { const [lbl, cls] = MOVE_LABELS[action] || [action, 'badge-soft-muted']; return el('span', { class: 'badge ' + cls, text: lbl }); };
+  // Signed quantity cell: +250 (green) / -40 (red), em-dash when absent.
+  const signedQty = (q) => {
+    if (q == null) return el('span', { class: 'text-muted', text: '—' });
+    const n = Number(q);
+    return el('span', { class: n < 0 ? 'text-danger fw-semibold' : 'text-success fw-semibold', text: (n > 0 ? '+' : '') + qty(n) });
+  };
   const toolbar = (...actions) => el('div', { class: 'd-flex align-items-center flex-wrap gap-2 mb-3' },
     ...actions);
 
@@ -90,11 +104,17 @@ window.Views = window.Views || {};
           el('td', { class: 'text-end', text: qty(i.stockLevel) + ' ' + i.unit }),
           el('td', { class: 'text-end', text: qty(i.threshold) }),
           el('td', { html: statusBadge(i.status) }),
-          el('td', { class: 'text-end' }, isManager
-            ? el('div', { class: 'd-flex gap-2 justify-content-end' },
-                button('Adjust', 'btn-sm btn-light', () => adjustForm(i)),
-                button('Edit', 'btn-sm btn-outline-secondary', () => ingredientForm(i)))
-            : el('span', { class: 'text-muted small', text: '—' })))));
+          el('td', { class: 'text-end' },
+            el('div', { class: 'd-flex gap-2 justify-content-end flex-wrap' },
+              button('<i class="bi bi-clock-history"></i> History', 'btn-sm btn-outline-secondary', () => historyModal(i)),
+              ...(isManager
+                ? [
+                    button('<i class="bi bi-plus-circle"></i> In', 'btn-sm btn-outline-success', () => stockInForm(i)),
+                    button('<i class="bi bi-dash-circle"></i> Out', 'btn-sm btn-outline-danger', () => stockOutForm(i)),
+                    button('Adjust', 'btn-sm btn-light', () => adjustForm(i)),
+                    button('Edit', 'btn-sm btn-outline-secondary', () => ingredientForm(i)),
+                  ]
+                : []))))));
       };
       renderRows(items);
       search.addEventListener('input', () => {
@@ -134,6 +154,141 @@ window.Views = window.Views || {};
           onSubmit: async (v) => { await Api.post(`/api/inventory/${i.id}/adjust`, { newQuantity: v.newQuantity, reason: v.reason }); Api.bustCache('/api/inventory'); Api.bustCache('/api/menu'); toast('Stock adjusted.'); reload(); },
         });
       }
+      function stockInForm(i) {
+        formModal({
+          title: 'Stock In — ' + i.name,
+          fields: [
+            { name: 'quantity', label: `Quantity received (${i.unit})`, type: 'number', step: '0.001', min: '0', required: true },
+            { name: 'reason', label: 'Reason / note (optional)', type: 'textarea' },
+          ],
+          submitText: 'Add to stock',
+          onSubmit: async (v) => { await Api.post(`/api/inventory/${i.id}/stock-in`, { quantity: v.quantity, reason: v.reason }); Api.bustCache('/api/inventory'); Api.bustCache('/api/menu'); toast('Stock added.'); reload(); },
+        });
+      }
+      function stockOutForm(i) {
+        formModal({
+          title: 'Stock Out — ' + i.name,
+          fields: [
+            { name: 'quantity', label: `Quantity removed (${i.unit})`, type: 'number', step: '0.001', min: '0', required: true },
+            { name: 'reason', label: 'Reason (required)', type: 'textarea', required: true },
+          ],
+          submitText: 'Remove from stock',
+          onSubmit: async (v) => { await Api.post(`/api/inventory/${i.id}/stock-out`, { quantity: v.quantity, reason: v.reason }); Api.bustCache('/api/inventory'); Api.bustCache('/api/menu'); toast('Stock removed.'); reload(); },
+        });
+      }
+      async function historyModal(i) {
+        const host = el('div', {}, spinner('Loading history…'));
+        modal({ title: 'Stock history — ' + i.name, body: host, size: 'lg' });
+        let rows;
+        try { rows = await Api.get(`/api/inventory/${i.id}/history?take=200`); }
+        catch (e) { host.innerHTML = ''; host.appendChild(empty('bi-exclamation-triangle', e.message)); return; }
+        host.innerHTML = '';
+        if (!rows.length) { host.appendChild(empty('bi-clock-history', 'No stock movements recorded yet.')); return; }
+        const tb = el('tbody');
+        rows.forEach((m) => tb.appendChild(el('tr', {},
+          el('td', { class: 'text-nowrap small', text: dateTime(m.timestamp) }),
+          el('td', {}, moveTypeBadge(m.action)),
+          el('td', { class: 'text-end' }, signedQty(m.quantity)),
+          el('td', { class: 'text-end small', text: m.balanceAfter == null ? '—' : qty(m.balanceAfter) + ' ' + i.unit }),
+          el('td', { class: 'small', text: m.details }),
+          el('td', { class: 'small text-muted text-nowrap', text: m.username }))));
+        host.appendChild(el('div', { class: 'table-responsive' },
+          el('table', { class: 'table table-sm align-middle mb-0' },
+            el('thead', {}, el('tr', {},
+              el('th', { text: 'When' }), el('th', { text: 'Type' }),
+              el('th', { class: 'text-end', text: 'Qty' }), el('th', { class: 'text-end', text: 'Balance' }),
+              el('th', { text: 'Details' }), el('th', { text: 'By' }))),
+            tb)));
+      }
+    },
+  };
+
+  // ================= STOCK MOVEMENTS =================
+  Views.movements = {
+    render: async (root) => {
+      root.appendChild(spinner());
+      let ingredients;
+      try { ingredients = await Api.cachedGet('/api/inventory'); }
+      catch (e) { root.innerHTML = ''; root.appendChild(empty('bi-exclamation-triangle', e.message)); return; }
+      root.innerHTML = '';
+
+      const state = { skip: 0, take: 50 };
+      const itemSel = el('select', { class: 'form-select form-select-sm', style: 'max-width:240px' },
+        el('option', { value: '' }, 'All items'),
+        ...ingredients.map((i) => el('option', { value: i.id }, `${i.name} (${i.code})`)));
+      const typeSel = el('select', { class: 'form-select form-select-sm', style: 'max-width:160px' },
+        el('option', { value: '' }, 'All types'),
+        el('option', { value: 'StockIn' }, 'Stock In'),
+        el('option', { value: 'StockOut' }, 'Stock Out'),
+        el('option', { value: 'InventoryAdjust' }, 'Adjust'),
+        el('option', { value: 'StockSale' }, 'Sale'),
+        el('option', { value: 'StockRefund' }, 'Refund'));
+      const fromIn = el('input', { class: 'form-control form-control-sm', type: 'date', style: 'max-width:160px' });
+      const toIn = el('input', { class: 'form-control form-control-sm', type: 'date', style: 'max-width:160px' });
+
+      // Build the filter query string. Date inputs are local days; `to` is sent as the start of the
+      // next day so the [from, to) server filter is inclusive of the chosen end date.
+      const filterParams = () => {
+        const p = new URLSearchParams();
+        if (itemSel.value) p.set('ingredientId', itemSel.value);
+        if (typeSel.value) p.set('type', typeSel.value);
+        if (fromIn.value) p.set('from', new Date(fromIn.value + 'T00:00:00').toISOString());
+        if (toIn.value) { const d = new Date(toIn.value + 'T00:00:00'); d.setDate(d.getDate() + 1); p.set('to', d.toISOString()); }
+        return p;
+      };
+
+      const exportBtn = button('<i class="bi bi-download"></i> Export CSV', 'btn-outline-secondary btn-sm',
+        () => Api.download('/api/inventory/movements/export?' + filterParams().toString(), 'stock-movements.csv').catch((e) => toast(e.message, 'danger')));
+
+      // Carded filter bar: labelled fields on the left, Apply/Clear actions, and Export pushed to
+      // the far right (.filter-bar styles live in app.css; layout wraps + stacks on small screens).
+      const field = (label, input) => el('div', { class: 'filter-field' }, el('label', { class: 'form-label', text: label }), input);
+      const applyBtn = button('<i class="bi bi-funnel"></i> Apply', 'btn-primary btn-sm', () => { state.skip = 0; load(); });
+      const clearBtn = button('<i class="bi bi-arrow-counterclockwise"></i> Clear', 'btn-light btn-sm',
+        () => { itemSel.value = ''; typeSel.value = ''; fromIn.value = ''; toIn.value = ''; state.skip = 0; load(); });
+      root.appendChild(el('div', { class: 'filter-bar mb-3' },
+        field('Item', itemSel), field('Type', typeSel), field('From', fromIn), field('To', toIn),
+        el('div', { class: 'filter-field filter-field--actions' }, el('span', { class: 'form-label', html: '&nbsp;' }),
+          el('div', { class: 'filter-bar-actions' }, applyBtn, clearBtn)),
+        el('div', { class: 'filter-bar-actions filter-bar-export' }, exportBtn)));
+
+      const tbody = el('tbody');
+      root.appendChild(card(tableWrap(
+        [{ t: 'When' }, { t: 'Item' }, { t: 'Type' }, { t: 'Qty', end: 1 }, { t: 'Balance', end: 1 }, { t: 'Details' }, { t: 'By' }], tbody)));
+      const pager = el('div', { class: 'd-flex align-items-center justify-content-between mt-2' });
+      root.appendChild(pager);
+
+      async function load() {
+        tbody.innerHTML = '';
+        tbody.appendChild(el('tr', {}, el('td', { colspan: 7 }, spinner('Loading…'))));
+        const p = filterParams(); p.set('skip', state.skip); p.set('take', state.take);
+        let res;
+        try { res = await Api.get('/api/inventory/movements?' + p.toString()); }
+        catch (e) { tbody.innerHTML = ''; tbody.appendChild(el('tr', {}, el('td', { colspan: 7 }, empty('bi-exclamation-triangle', e.message)))); return; }
+        tbody.innerHTML = '';
+        if (!res.items.length) {
+          tbody.appendChild(el('tr', {}, el('td', { colspan: 7 }, empty('bi-arrow-left-right', 'No stock movements match these filters.'))));
+        }
+        res.items.forEach((m) => tbody.appendChild(el('tr', {},
+          el('td', { class: 'text-nowrap small', text: dateTime(m.timestamp) }),
+          el('td', {}, el('div', { class: 'fw-semibold small', text: m.ingredientName }), el('div', { class: 'text-muted small', text: m.ingredientCode })),
+          el('td', {}, moveTypeBadge(m.action)),
+          el('td', { class: 'text-end' }, signedQty(m.quantity)),
+          el('td', { class: 'text-end small', text: m.balanceAfter == null ? '—' : qty(m.balanceAfter) }),
+          el('td', { class: 'small', text: m.details }),
+          el('td', { class: 'small text-muted text-nowrap', text: m.username }))));
+
+        pager.innerHTML = '';
+        const lo = res.total === 0 ? 0 : res.skip + 1;
+        const hi = Math.min(res.skip + res.take, res.total);
+        pager.appendChild(el('div', { class: 'text-muted small', text: `${lo}–${hi} of ${res.total}` }));
+        const prev = button('<i class="bi bi-chevron-left"></i> Prev', 'btn-light btn-sm', () => { state.skip = Math.max(0, state.skip - state.take); load(); });
+        prev.disabled = res.skip <= 0;
+        const next = button('Next <i class="bi bi-chevron-right"></i>', 'btn-light btn-sm', () => { state.skip += state.take; load(); });
+        next.disabled = (res.skip + res.take) >= res.total;
+        pager.appendChild(el('div', { class: 'd-flex gap-2' }, prev, next));
+      }
+      load();
     },
   };
 

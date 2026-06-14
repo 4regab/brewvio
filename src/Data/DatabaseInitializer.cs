@@ -266,6 +266,12 @@ public static class DatabaseInitializer
             await db.Payments.ExecuteDeleteAsync();
             await db.TransactionItems.ExecuteDeleteAsync();
             await db.Transactions.ExecuteDeleteAsync();
+            // Drop the previously-seeded stock-movement rows so the backfill below cannot duplicate
+            // them. Only sale/refund rows are seed-generated; manual StockIn/StockOut/InventoryAdjust
+            // rows are real operator history and are left untouched.
+            await db.AuditLogs
+                .Where(a => a.Action == StockActions.Sale || a.Action == StockActions.Refund)
+                .ExecuteDeleteAsync();
         }
 
         var cashier = await db.Users.FirstAsync(u => u.Role == Roles.Cashier && u.IsActive);
@@ -354,6 +360,80 @@ public static class DatabaseInitializer
         }
 
         db.Transactions.AddRange(transactions);
+        await db.SaveChangesAsync();   // assigns the transaction ids referenced in the ledger below
+
+        // Backfill the per-ingredient stock-movement ledger for this seeded sales history so the
+        // Stock Movements page shows past transactions, not just live POS orders.
+        await BackfillSaleMovementsAsync(db, transactions, cashier);
+    }
+
+    /// <summary>
+    /// Records one <see cref="StockActions.Sale"/> ledger row per consumed ingredient for each of
+    /// the supplied (already-persisted) seeded transactions, mirroring
+    /// <c>OrderService.LogSaleMovementsAsync</c> byte-for-byte so live and seeded rows are
+    /// indistinguishable. To keep the running balance non-negative while leaving today's stock on
+    /// the clean declared levels, each ingredient's starting stock is first raised by its total
+    /// historical consumption; the sales are then replayed in chronological order, deducting that
+    /// same total back out. The net effect on the current <c>StockLevel</c> is therefore zero.
+    /// </summary>
+    private static async Task BackfillSaleMovementsAsync(
+        BrewvioDbContext db, List<Transaction> transactions, User cashier)
+    {
+        // Recipe map: menu item id -> [(ingredient id, qty consumed per unit sold)].
+        var recipeByItem = (await db.RecipeIngredients.AsNoTracking().ToListAsync())
+            .GroupBy(r => r.MenuItemId)
+            .ToDictionary(g => g.Key, g => g.Select(r => (r.IngredientId, r.Quantity)).ToList());
+
+        // Per-transaction ingredient usage (an order line can repeat an ingredient via its recipe).
+        static Dictionary<int, decimal> UsageOf(Transaction tx,
+            Dictionary<int, List<(int IngredientId, decimal Quantity)>> recipes)
+        {
+            var usage = new Dictionary<int, decimal>();
+            foreach (var item in tx.Items)
+                if (recipes.TryGetValue(item.MenuItemId, out var lines))
+                    foreach (var (ingId, qtyPerUnit) in lines)
+                        usage[ingId] = usage.GetValueOrDefault(ingId) + qtyPerUnit * item.Quantity;
+            return usage;
+        }
+
+        // Total consumption per ingredient across the whole seeded history.
+        var totalUsage = new Dictionary<int, decimal>();
+        foreach (var tx in transactions)
+            foreach (var (ingId, qty) in UsageOf(tx, recipeByItem))
+                totalUsage[ingId] = totalUsage.GetValueOrDefault(ingId) + qty;
+
+        if (totalUsage.Count == 0) return;
+
+        // Pre-load each touched ingredient's stock by the total it will consume, so the replayed
+        // balance never dips below its declared level and lands back exactly where it started.
+        var ingById = (await db.Ingredients.Where(i => totalUsage.Keys.Contains(i.Id)).ToListAsync())
+            .ToDictionary(i => i.Id);
+        foreach (var (ingId, total) in totalUsage)
+            if (ingById.TryGetValue(ingId, out var ing)) ing.StockLevel += total;
+
+        // Replay chronologically so each ingredient's BalanceAfter decreases monotonically over time.
+        foreach (var tx in transactions.OrderBy(t => t.Timestamp).ThenBy(t => t.Id))
+        {
+            foreach (var (ingId, qty) in UsageOf(tx, recipeByItem))
+            {
+                if (qty <= 0 || !ingById.TryGetValue(ingId, out var ing)) continue;
+                var before = ing.StockLevel;
+                ing.StockLevel -= qty;
+                var after = ing.StockLevel;
+                db.AuditLogs.Add(new AuditLog
+                {
+                    Timestamp    = tx.Timestamp,
+                    UserId       = cashier.Id,
+                    Username     = cashier.Username,
+                    Action       = StockActions.Sale,
+                    Details      = $"{ing.Name}: -{qty:0.###} {ing.Unit} (sale Txn #{tx.Id}). {before:0.###} -> {after:0.###} {ing.Unit}",
+                    IngredientId = ing.Id,
+                    Quantity     = -qty,
+                    BalanceAfter = after,
+                });
+            }
+        }
+
         await db.SaveChangesAsync();
     }
 }

@@ -19,11 +19,11 @@ window.Views = window.Views || {};
     if (n.includes('caramel macchiato')) return IMG_BASE + 'Cold Brew Coffee/Caramel Macchiato.webp';
     if (n.includes("chao's") || n.includes("chao")) return IMG_BASE + 'Cold Brew Coffee/Chao_s Coldbrew.webp';
     if (n.includes('cold brew latte')) return IMG_BASE + 'Cold Brew Coffee/Cold Brew Latte.webp';
-    if (n.includes('mocha') && c === 'cold coffee') return IMG_BASE + 'Cold Brew Coffee/Mocha.webp';
+    if (n.includes('mocha') && c === 'cold brew coffee') return IMG_BASE + 'Cold Brew Coffee/Mocha.webp';
     if (n.includes('spanish latte')) return IMG_BASE + 'Cold Brew Coffee/Spanish Latte.webp';
     if (n.includes('vanilla latte')) return IMG_BASE + 'Cold Brew Coffee/Vanilla Latte.webp';
-    if (n.includes('latte') && c === 'cold coffee') return IMG_BASE + 'Cold Brew Coffee/Latte.webp';
-    if (c === 'cold coffee') return IMG_BASE + 'Cold Brew Coffee/Americano.webp';
+    if (n.includes('latte') && c === 'cold brew coffee') return IMG_BASE + 'Cold Brew Coffee/Latte.webp';
+    if (c === 'cold brew coffee') return IMG_BASE + 'Cold Brew Coffee/Americano.webp';
 
     // Non-Coffee
     if (n.includes('strawberry milk')) return IMG_BASE + 'Non-Coffee/Strawberry Milk.webp';
@@ -46,7 +46,13 @@ window.Views = window.Views || {};
     if (n.includes('milo dinosaur')) return IMG_BASE + 'Frappe/Milo Dinosaur.webp';
     if (n.includes('frappuccino') || n.includes('frappucino')) return IMG_BASE + 'Frappe/Frappuccino.webp';
     if (n.includes('mocha') && c === 'frappe') return IMG_BASE + 'Frappe/Mocha.webp';
-    if (n.includes('frappe') || c === 'frappe') return IMG_BASE + 'Frappe/Strawberry.webp';
+    if (n.includes('frappe') || c === 'frappe') {
+      if (n.includes('blueberry'))                      return IMG_BASE + 'Frappe/Blueberry.webp';
+      if (n.includes('chocolate') || n.includes('choco')) return IMG_BASE + 'Frappe/Chocolate.webp';
+      if (n.includes('cookies') || n.includes('cream') || n.includes('oreo')) return IMG_BASE + 'Frappe/Cookies & Cream.webp';
+      if (n.includes('strawberry'))                     return IMG_BASE + 'Frappe/Strawberry.webp';
+      return IMG_BASE + 'Frappe/Strawberry.webp';   // generic frappe fallback
+    }
 
     // Qik's Fried Noodles — Overload
     if (n.includes('overload') && n.includes('korean')) return IMG_BASE + 'QIK_S Fried Noodles/Overload/Overload Noodles w(2) Korean Sausage.webp';
@@ -64,10 +70,11 @@ window.Views = window.Views || {};
     if (c.includes('noodle') || c.includes('qik')) return IMG_BASE + 'QIK_S Fried Noodles/Plain Noodles.webp';
 
     // Fruit Soda
-    if (n.includes('soda') || c === 'fruit soda') return IMG_BASE + 'Non-Coffee/Strawberry Milk.webp';
+    if (n.includes('soda') || c === 'fruit soda') return IMG_BASE + 'Fruit Soda/Fruit Soda.webp';
 
     // Food — individual image mapping
     if (c === 'food') {
+      if (n.includes('tonkatsu sauce'))   return IMG_BASE + 'Food/Tonkatsu Sauce.webp';
       if (n.includes('pork tonkatsu'))    return IMG_BASE + 'Food/Pork Tonkatsu.webp';
       if (n.includes('chicken tonkatsu')) return IMG_BASE + 'Food/Chicken Tonkatsu.webp';
       if (n.includes('chicken poppers'))  return IMG_BASE + 'Food/Chicken Poppers.webp';
@@ -79,6 +86,8 @@ window.Views = window.Views || {};
       if (n.includes('tapsilog'))         return IMG_BASE + 'Food/Tapsilog.webp';
       if (n.includes('sausilog'))         return IMG_BASE + 'Food/Sausilog.webp';
       if (n.includes('bacsilog'))         return IMG_BASE + 'Food/Bacsilog.webp';
+      if (n === 'egg')                    return IMG_BASE + 'Food/Egg.webp';
+      if (n === 'rice')                   return IMG_BASE + 'Food/Rice.webp';
       // Generic food fallback
       return IMG_BASE + 'Food/Chicken Tonkatsu.webp';
     }
@@ -92,7 +101,7 @@ window.Views = window.Views || {};
     const k = (name || '').toLowerCase();
     if (k === 'all') return 'bi-grid-fill';
     if (k === 'food') return 'bi-egg-fried';
-    if (k === 'cold coffee') return 'bi-cup-hot-fill';
+    if (k === 'cold brew coffee') return 'bi-cup-hot-fill';
     if (k === 'non-coffee') return 'bi-droplet';
     if (k.includes('matcha')) return 'bi-flower2';
     if (k === 'frappe') return 'bi-cup-straw';

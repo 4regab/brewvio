@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <link href="css/app.css?v=20260606w" rel="stylesheet" />
+  <link href="css/app.css?v=20260614d" rel="stylesheet" />
   <!-- Kick off the two startup API calls before JS even finishes parsing.
        By the time app.js runs Promise.all([me, settings/store]), responses may already be in flight. -->
   <link rel="preload" href="/api/auth/me" as="fetch" crossorigin="use-credentials" />
@@ -155,9 +155,9 @@
   <script defer src="js/api.js?v=20260606k"></script>
   <script defer src="js/ui.js?v=20260606k"></script>
   <script defer src="js/auth.js?v=20260606k"></script>
-  <script defer src="js/pos.js?v=20260606u"></script>
+  <script defer src="js/pos.js?v=20260614c"></script>
   <!-- reports.js and manage.js are lazy-loaded on first navigation to their views.
        Cashiers never download them; managers get them on demand. -->
-  <script defer src="js/app.js?v=20260606k"></script>
+  <script defer src="js/app.js?v=20260614d"></script>
 </body>
 </html>

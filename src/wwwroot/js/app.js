@@ -7,6 +7,7 @@ const App = (() => {
     { id: 'activity', label: 'Orders', icon: 'bi-receipt-cutoff', roles: ['Manager', 'Cashier'] },
     { id: 'reports', label: 'Report', icon: 'bi-graph-up-arrow', roles: ['Manager'] },
     { id: 'inventory', label: 'Inventory', icon: 'bi-box-seam', roles: ['Manager', 'Cashier'] },
+    { id: 'movements', label: 'Stock Movements', icon: 'bi-arrow-left-right', roles: ['Manager', 'Cashier'] },
     { id: 'menu', label: 'Menu Edit', icon: 'bi-card-list', roles: ['Manager'] },
     { id: 'users', label: 'Users', icon: 'bi-people', roles: ['Manager'] },
     { id: 'audit', label: 'Audit Log', icon: 'bi-shield-check', roles: ['Manager'] },
@@ -114,10 +115,10 @@ const App = (() => {
         });
         window._reportsLoaded = true;
       }
-      if (['inventory', 'menu', 'users', 'audit', 'settings'].includes(id) && !window._manageLoaded) {
+      if (['inventory', 'movements', 'menu', 'users', 'audit', 'settings'].includes(id) && !window._manageLoaded) {
         await new Promise((resolve, reject) => {
           const s = document.createElement('script');
-          s.src = 'js/manage.js?v=20260606k';
+          s.src = 'js/manage.js?v=20260614d';
           s.onload = resolve; s.onerror = reject;
           document.head.appendChild(s);
         });

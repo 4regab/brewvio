@@ -579,6 +579,45 @@ a:hover { color: var(--brew-blue-d); }
 }
 .form-label { font-family: 'Inter', sans-serif; font-weight: 600; font-size: .8rem; color: var(--brew-ink-2); }
 
+/* ── Filter bar — carded toolbar for list views (Stock Movements, etc.) ───── */
+.filter-bar {
+  display: flex; flex-wrap: wrap; align-items: flex-end; gap: .65rem .9rem;
+  background: var(--brew-surface);
+  border: 1px solid var(--brew-border);
+  border-radius: var(--r-card);
+  box-shadow: var(--shadow-sm);
+  padding: 1rem 1.15rem;
+}
+.filter-bar .filter-field { display: flex; flex-direction: column; gap: .3rem; }
+.filter-bar .filter-field > .form-label {
+  margin: 0; font-size: .68rem; font-weight: 700; letter-spacing: .04em;
+  text-transform: uppercase; color: var(--brew-muted); line-height: 1;
+}
+.filter-bar-actions { display: flex; align-items: center; gap: .5rem; }
+.filter-bar-export { margin-left: auto; }
+/* Match the small inputs' height and give the buttons a little more presence. */
+.filter-bar .btn-sm { padding: .42rem .9rem; font-size: .8rem; }
+.filter-bar .btn-sm i { font-size: .85em; margin-right: .15rem; }
+
+/* Visible keyboard focus on every interactive filter control — WCAG 2.4.7. */
+.filter-bar .btn:focus-visible,
+.filter-bar .form-control:focus-visible,
+.filter-bar .form-select:focus-visible {
+  outline: 2px solid var(--brew-espresso); outline-offset: 2px;
+}
+
+/* Stack cleanly on phones: each field + the action clusters go full-width. */
+@media (max-width: 575.98px) {
+  .filter-bar { gap: .6rem; padding: .9rem 1rem; }
+  .filter-bar .filter-field { flex: 1 1 100%; }
+  .filter-bar .filter-field .form-select,
+  .filter-bar .filter-field .form-control { max-width: none !important; width: 100%; }
+  .filter-bar .filter-field--actions .filter-bar-actions { width: 100%; }
+  .filter-bar .filter-field--actions .btn { flex: 1 1 0; }
+  .filter-bar-export { margin-left: 0; width: 100%; }
+  .filter-bar-export .btn { width: 100%; }
+}
+
 /* Focus rings for cart action buttons â€” WCAG 2.4.7 */
 .cart-header-edit:focus-visible,
 .qty-stepper button:focus-visible,

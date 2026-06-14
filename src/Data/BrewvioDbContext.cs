@@ -32,6 +32,12 @@ public class BrewvioDbContext(DbContextOptions<BrewvioDbContext> options) : DbCo
         modelBuilder.Entity<Transaction>().HasIndex(t => new { t.CashierId, t.Status });
         modelBuilder.Entity<Transaction>().HasIndex(t => t.Status);
         modelBuilder.Entity<AuditLog>().HasIndex(a => a.Timestamp);
+        // Per-ingredient stock history reads: WHERE IngredientId = @id ORDER BY Timestamp DESC.
+        // Composite (IngredientId, Timestamp) so the filter + ordering are served by one index.
+        modelBuilder.Entity<AuditLog>().HasIndex(a => new { a.IngredientId, a.Timestamp });
+        // Stock-ledger amounts use the same precision as ingredient quantities (12,3).
+        modelBuilder.Entity<AuditLog>().Property(x => x.Quantity).HasPrecision(12, 3);
+        modelBuilder.Entity<AuditLog>().Property(x => x.BalanceAfter).HasPrecision(12, 3);
 
         // Decimal precision — money: (12,2); quantities: (12,3); unit cost: (12,4).
         modelBuilder.Entity<Ingredient>(e =>

@@ -3,6 +3,7 @@ using System;
 using Brewvio.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Brewvio.Migrations
 {
     [DbContext(typeof(BrewvioDbContext))]
-    partial class BrewvioDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260613143640_AddAuditLogIngredientId")]
+    partial class AddAuditLogIngredientId
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -48,20 +51,12 @@ namespace Brewvio.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
-                    b.Property<decimal?>("BalanceAfter")
-                        .HasPrecision(12, 3)
-                        .HasColumnType("numeric(12,3)");
-
                     b.Property<string>("Details")
                         .IsRequired()
                         .HasColumnType("text");
 
                     b.Property<int?>("IngredientId")
                         .HasColumnType("integer");
-
-                    b.Property<decimal?>("Quantity")
-                        .HasPrecision(12, 3)
-                        .HasColumnType("numeric(12,3)");
 
                     b.Property<DateTime>("Timestamp")
                         .HasColumnType("timestamp with time zone");

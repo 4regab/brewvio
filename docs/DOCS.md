@@ -257,7 +257,7 @@ dotnet run --project src/Brewvio.csproj -- --force-seed-sales
 | `Transactions` | Sale records; status: Draft → Preparing → Completed / Refunded / Cancelled |
 | `TransactionItems` | Line-item snapshot (name/price captured at sale time) |
 | `Payments` | Individual tenders (Cash / GCash); multiple rows = split payment |
-| `AuditLogs` | Immutable append-only action log |
+| `AuditLogs` | Immutable append-only action log (stock-movement rows also carry `IngredientId`, signed `Quantity`, and `BalanceAfter` for the stock ledger; no FK) |
 | `AppSettings` | Key/value store for store config (`TaxRatePercent`, `StoreName`, etc.) |
 
 ### Decimal precision
@@ -711,6 +711,67 @@ Sets stock to an absolute value. Requires a reason for the audit trail.
 
 ---
 
+#### `POST /api/inventory/{id}/stock-in` *(Manager)*
+
+Adds a positive quantity to current stock (e.g. a delivery/receipt) and records a per-ingredient
+`StockIn` movement. Reason is optional.
+
+**Request**
+```json
+{ "quantity": 5000, "reason": "Supplier delivery" }
+```
+
+**Response `200`** — `IngredientDto`  
+**Response `400`** — quantity not greater than zero  
+**Response `404`** — not found
+
+---
+
+#### `POST /api/inventory/{id}/stock-out` *(Manager)*
+
+Removes a positive quantity from current stock (e.g. wastage/spoilage) and records a per-ingredient
+`StockOut` movement. Reason is **required**; the move is rejected if it would drive stock below zero.
+
+**Request**
+```json
+{ "quantity": 250, "reason": "Spillage" }
+```
+
+**Response `200`** — `IngredientDto`  
+**Response `400`** — quantity not greater than zero, missing reason, or insufficient stock  
+**Response `404`** — not found
+
+---
+
+#### `GET /api/inventory/{id}/history?take=100`
+
+Authenticated (Manager **and** Cashier). Returns this ingredient's stock-movement history
+(newest first) — `StockIn`, `StockOut`, `InventoryAdjust`, `StockSale`, `StockRefund`. `take` is
+clamped to 1–500.
+
+**Response `200`** — array of `StockMovementDto` (`id`, `timestamp`, `ingredientId`, `ingredientName`, `ingredientCode`, `username`, `action`, `quantity` (signed: + in/refund, − out/sale), `balanceAfter`, `details`)
+
+---
+
+#### `GET /api/inventory/movements`
+
+Authenticated (Manager **and** Cashier). Global stock-movement ledger across all ingredients,
+paginated and filterable. Query params (all optional): `from` / `to` (ISO date-time, `[from, to)`),
+`type` (one of the movement actions), `ingredientId`, `skip` (default 0), `take` (default 50, clamped 1–200).
+
+**Response `200`** — `PagedStockMovementsDto` (`total`, `skip`, `take`, `items: StockMovementDto[]`)
+
+---
+
+#### `GET /api/inventory/movements/export`
+
+Authenticated (Manager **and** Cashier). CSV export of the filtered ledger (same filters as
+`/movements`, no pagination; capped at 10,000 rows).
+
+**Response `200`** — `text/csv` (columns: Timestamp, Item Code, Item, Type, Quantity, Balance After, User, Details)
+
+---
+
 #### `DELETE /api/inventory/{id}` *(Manager)*
 
 Permanently deletes an ingredient. Fails if the ingredient is used in any recipe.
@@ -916,7 +977,9 @@ Same params. Downloads report as PDF.
 
 #### `GET /api/audit?take=200` *(Manager)*
 
-Returns the most recent audit log entries, newest first.
+Returns the most recent audit log entries, newest first. The high-volume per-ingredient
+`StockSale` / `StockRefund` movement rows are **excluded** here (they remain available via
+`GET /api/inventory/{id}/history`); manual `StockIn` / `StockOut` / `InventoryAdjust` rows are kept.
 
 **Response `200`** — array of `AuditLogDto`
 

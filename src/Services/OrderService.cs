@@ -66,6 +66,7 @@ public class OrderService(BrewvioDbContext db, CurrentUser current, AuditService
         audit.Add("OrderPlaced", $"Txn total {total:0.00} via {method}; {lineItems.Count} line(s).");
 
         var warnings = await PersistWithStockAsync(usage, ct);
+        await LogSaleMovementsAsync(usage, tx.Id, ct);
 
         return ToReceipt(tx, current.Username, tendered, change, warnings);
     }
@@ -127,6 +128,32 @@ public class OrderService(BrewvioDbContext db, CurrentUser current, AuditService
             "The order could not be completed due to high inventory contention. Please try again.");
     }
 
+    // Writes one StockSale movement row per consumed ingredient AFTER the deduction has committed,
+    // in a separate SaveChanges. Decoupled from PersistWithStockAsync on purpose: it leaves that
+    // concurrency-critical retry loop completely untouched (zero oversell-regression risk) and lets
+    // each row reference the now-assigned transaction id. The committed balance is read back from
+    // the tracked ingredient so the before -> after reflects exactly this sale's deduction. If the
+    // process dies between the two commits the stock stays correct; only the history rows are lost.
+    private async Task LogSaleMovementsAsync(Dictionary<int, decimal> usage, int txId, CancellationToken ct)
+    {
+        if (usage.Count == 0) return;
+        // Reuse the ingredients PersistWithStockAsync already loaded + deducted (still tracked in
+        // this context) instead of re-querying — saves a DB round-trip per order on the remote link.
+        var ings = db.ChangeTracker.Entries<Ingredient>().Select(e => e.Entity)
+            .Where(i => usage.ContainsKey(i.Id)).ToList();
+        foreach (var ing in ings)
+        {
+            var qty = usage[ing.Id];
+            var after = ing.StockLevel;
+            var before = after + qty;
+            var log = audit.Add(StockActions.Sale,
+                $"{ing.Name}: -{qty:0.###} {ing.Unit} (sale Txn #{txId}). {before:0.###} -> {after:0.###} {ing.Unit}", ing.Id);
+            log.Quantity = -qty;
+            log.BalanceAfter = after;
+        }
+        await db.SaveChangesAsync(ct);
+    }
+
     public async Task<ReceiptDto?> RefundAsync(int id, string reason, CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(reason)) throw new ArgumentException("A reason is required for a refund.");
@@ -153,9 +180,26 @@ public class OrderService(BrewvioDbContext db, CurrentUser current, AuditService
         var recipeLines = await db.RecipeIngredients.Where(r => menuIds.Contains(r.MenuItemId)).ToListAsync(ct);
         var ingIds = recipeLines.Select(r => r.IngredientId).Distinct().ToList();
         var ingById = await db.Ingredients.Where(i => ingIds.Contains(i.Id)).ToDictionaryAsync(i => i.Id, ct);
+
+        // Aggregate the quantity to restore per ingredient across all sold items.
+        var restore = new Dictionary<int, decimal>();
         foreach (var item in tx.Items)
             foreach (var rl in recipeLines.Where(r => r.MenuItemId == item.MenuItemId))
-                if (ingById.TryGetValue(rl.IngredientId, out var ing)) ing.StockLevel += rl.Quantity * item.Quantity;
+                restore[rl.IngredientId] = restore.GetValueOrDefault(rl.IngredientId) + rl.Quantity * item.Quantity;
+
+        // Apply each restock and record one per-ingredient StockRefund movement. This is atomic with
+        // the restore: the callers (RefundAsync / SetStatusAsync) SaveChanges once and there is no
+        // concurrency-retry loop here, so staging the audit rows alongside the increment is safe.
+        foreach (var (ingId, qty) in restore)
+        {
+            if (qty <= 0 || !ingById.TryGetValue(ingId, out var ing)) continue;
+            var before = ing.StockLevel;
+            ing.StockLevel += qty;
+            var log = audit.Add(StockActions.Refund,
+                $"{ing.Name}: +{qty:0.###} {ing.Unit} (refund Txn #{tx.Id}). {before:0.###} -> {ing.StockLevel:0.###} {ing.Unit}", ing.Id);
+            log.Quantity = qty;   // positive: stock restored
+            log.BalanceAfter = ing.StockLevel;
+        }
     }
 
     // Pre-payment cancellation: only the audited reason is persisted (cart cleared client-side).
@@ -242,6 +286,7 @@ public class OrderService(BrewvioDbContext db, CurrentUser current, AuditService
 
         audit.Add("DraftConfirmed", $"Draft #{tx.Id} confirmed; total {total:0.00} via {method}.");
         var warnings = await PersistWithStockAsync(usage, ct);
+        await LogSaleMovementsAsync(usage, tx.Id, ct);
         return ToReceipt(tx, current.Username, tendered, change, warnings);
     }
 
