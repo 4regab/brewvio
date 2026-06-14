@@ -19,11 +19,11 @@ window.Views = window.Views || {};
     if (n.includes('caramel macchiato')) return IMG_BASE + 'Cold Brew Coffee/Caramel Macchiato.webp';
     if (n.includes("chao's") || n.includes("chao")) return IMG_BASE + 'Cold Brew Coffee/Chao_s Coldbrew.webp';
     if (n.includes('cold brew latte')) return IMG_BASE + 'Cold Brew Coffee/Cold Brew Latte.webp';
-    if (n.includes('mocha') && c === 'cold brew coffee') return IMG_BASE + 'Cold Brew Coffee/Mocha.webp';
+    if (n.includes('mocha') && (c === 'cold brew coffee' || c === 'cold coffee')) return IMG_BASE + 'Cold Brew Coffee/Mocha.webp';
     if (n.includes('spanish latte')) return IMG_BASE + 'Cold Brew Coffee/Spanish Latte.webp';
     if (n.includes('vanilla latte')) return IMG_BASE + 'Cold Brew Coffee/Vanilla Latte.webp';
-    if (n.includes('latte') && c === 'cold brew coffee') return IMG_BASE + 'Cold Brew Coffee/Latte.webp';
-    if (c === 'cold brew coffee') return IMG_BASE + 'Cold Brew Coffee/Americano.webp';
+    if (n.includes('latte') && (c === 'cold brew coffee' || c === 'cold coffee')) return IMG_BASE + 'Cold Brew Coffee/Latte.webp';
+    if (c === 'cold brew coffee' || c === 'cold coffee') return IMG_BASE + 'Cold Brew Coffee/Americano.webp';
 
     // Non-Coffee
     if (n.includes('strawberry milk')) return IMG_BASE + 'Non-Coffee/Strawberry Milk.webp';
@@ -101,7 +101,7 @@ window.Views = window.Views || {};
     const k = (name || '').toLowerCase();
     if (k === 'all') return 'bi-grid-fill';
     if (k === 'food') return 'bi-egg-fried';
-    if (k === 'cold brew coffee') return 'bi-cup-hot-fill';
+    if (k === 'cold brew coffee' || k === 'cold coffee') return 'bi-cup-hot-fill';
     if (k === 'non-coffee') return 'bi-droplet';
     if (k.includes('matcha')) return 'bi-flower2';
     if (k === 'frappe') return 'bi-cup-straw';

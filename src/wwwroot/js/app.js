@@ -109,7 +109,7 @@ const App = (() => {
       if ((id === 'reports' || id === 'performance') && !window._reportsLoaded) {
         await new Promise((resolve, reject) => {
           const s = document.createElement('script');
-          s.src = 'js/reports.js?v=20260614e';
+          s.src = 'js/reports.js?v=20260614f';
           s.onload = resolve; s.onerror = reject;
           document.head.appendChild(s);
         });
