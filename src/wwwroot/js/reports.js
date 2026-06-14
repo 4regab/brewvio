@@ -252,11 +252,13 @@ window.Views = window.Views || {};
         });
       }
 
-      // Menu image resolver (reuse logic from POS if available, fallback)
+      // Menu image resolver — kept in sync with menuImage() in pos.js
       function menuImageByName(name, category) {
         const IMG_BASE = 'img/';
         const n = (name || '').trim().toLowerCase();
         const c = (category || '').toLowerCase();
+
+        // Cold Brew Coffee
         if (n.includes('americano')) return IMG_BASE + 'Cold Brew Coffee/Americano.webp';
         if (n.includes('caramel macchiato')) return IMG_BASE + 'Cold Brew Coffee/Caramel Macchiato.webp';
         if (n.includes("chao's") || n.includes("chao")) return IMG_BASE + 'Cold Brew Coffee/Chao_s Coldbrew.webp';
@@ -266,6 +268,8 @@ window.Views = window.Views || {};
         if (n.includes('vanilla latte')) return IMG_BASE + 'Cold Brew Coffee/Vanilla Latte.webp';
         if (n.includes('latte') && c === 'cold brew coffee') return IMG_BASE + 'Cold Brew Coffee/Latte.webp';
         if (c === 'cold brew coffee') return IMG_BASE + 'Cold Brew Coffee/Americano.webp';
+
+        // Non-Coffee
         if (n.includes('strawberry milk')) return IMG_BASE + 'Non-Coffee/Strawberry Milk.webp';
         if (n.includes('blueberry milk')) return IMG_BASE + 'Non-Coffee/Blueberry Milk.webp';
         if (n.includes('mango cream')) return IMG_BASE + 'Non-Coffee/Mango Cream.webp';
@@ -273,32 +277,64 @@ window.Views = window.Views || {};
         if (n.includes('milky oreo')) return IMG_BASE + 'Non-Coffee/Milky Oreo.webp';
         if (n.includes('berry choco')) return IMG_BASE + 'Non-Coffee/Berry Choco Latte.webp';
         if (c === 'non-coffee') return IMG_BASE + 'Non-Coffee/Strawberry Milk.webp';
+
+        // Matcha Series
         if (n.includes('matcha frappe') || n.includes('matcha frappuccino')) return IMG_BASE + 'Matcha Series/Matcha Frappuccino.webp';
         if (n.includes('dirty matcha')) return IMG_BASE + 'Matcha Series/Dirty Matcha.webp';
         if (n.includes('strawberry matcha')) return IMG_BASE + 'Matcha Series/Strawberry Matcha.webp';
         if (n.includes('matcha')) return IMG_BASE + 'Matcha Series/Matcha Latte.webp';
         if (c === 'matcha series') return IMG_BASE + 'Matcha Series/Matcha Latte.webp';
+
+        // Frappe — per-flavor matching
         if (n.includes('java chip')) return IMG_BASE + 'Frappe/Java Chip.webp';
         if (n.includes('milo dinosaur')) return IMG_BASE + 'Frappe/Milo Dinosaur.webp';
         if (n.includes('frappuccino') || n.includes('frappucino')) return IMG_BASE + 'Frappe/Frappuccino.webp';
         if (n.includes('mocha') && c === 'frappe') return IMG_BASE + 'Frappe/Mocha.webp';
-        if (n.includes('frappe') || c === 'frappe') return IMG_BASE + 'Frappe/Strawberry.webp';
+        if (n.includes('frappe') || c === 'frappe') {
+          if (n.includes('blueberry'))                        return IMG_BASE + 'Frappe/Blueberry.webp';
+          if (n.includes('chocolate') || n.includes('choco')) return IMG_BASE + 'Frappe/Chocolate.webp';
+          if (n.includes('cookies') || n.includes('cream') || n.includes('oreo')) return IMG_BASE + 'Frappe/Cookies & Cream.webp';
+          if (n.includes('strawberry'))                       return IMG_BASE + 'Frappe/Strawberry.webp';
+          return IMG_BASE + 'Frappe/Strawberry.webp'; // generic frappe fallback
+        }
+
+        // Qik's Fried Noodles — Overload variants
+        if (n.includes('overload') && n.includes('korean')) return IMG_BASE + 'QIK_S Fried Noodles/Overload/Overload Noodles w(2) Korean Sausage.webp';
+        if (n.includes('overload') && n.includes('jap'))    return IMG_BASE + 'QIK_S Fried Noodles/Overload/Overload Noodles w(4) Jap Siomai.webp';
+        if (n.includes('overload') && n.includes('pork'))   return IMG_BASE + 'QIK_S Fried Noodles/Overload/Overload Noodles w(4) Pork Siomai.webp';
+        if (n.includes('overload') && n.includes('egg'))    return IMG_BASE + 'QIK_S Fried Noodles/Overload/Overload with 2 Eggs.webp';
         if (n.includes('overload')) return IMG_BASE + 'QIK_S Fried Noodles/Overload/Overload Noodles.webp';
+
+        // Qik's Fried Noodles — Regular
+        if (n.includes('korean sausage'))  return IMG_BASE + 'QIK_S Fried Noodles/Noodles with Korean Sausage.webp';
+        if (n.includes('japanese siomai')) return IMG_BASE + 'QIK_S Fried Noodles/Noodles with Japanese Siomai.webp';
+        if (n.includes('pork siomai'))     return IMG_BASE + 'QIK_S Fried Noodles/Noodles with Pork Siomai.webp';
+        if (n.includes('with egg'))        return IMG_BASE + 'QIK_S Fried Noodles/Noodles with Egg.webp';
+        if (n.includes('plain'))           return IMG_BASE + 'QIK_S Fried Noodles/Plain Noodles.webp';
         if (c.includes('noodle') || c.includes('qik')) return IMG_BASE + 'QIK_S Fried Noodles/Plain Noodles.webp';
+
+        // Fruit Soda
+        if (n.includes('soda') || c === 'fruit soda') return IMG_BASE + 'Fruit Soda/Fruit Soda.webp';
+
+        // Food
         if (c === 'food') {
-          if (n.includes('pork tonkatsu')) return IMG_BASE + 'Food/Pork Tonkatsu.webp';
+          if (n.includes('tonkatsu sauce'))   return IMG_BASE + 'Food/Tonkatsu Sauce.webp';
+          if (n.includes('pork tonkatsu'))    return IMG_BASE + 'Food/Pork Tonkatsu.webp';
           if (n.includes('chicken tonkatsu')) return IMG_BASE + 'Food/Chicken Tonkatsu.webp';
-          if (n.includes('chicken poppers')) return IMG_BASE + 'Food/Chicken Poppers.webp';
-          if (n.includes('chicken fingers')) return IMG_BASE + 'Food/Chicken Fingers.webp';
-          if (n.includes('crabstick')) return IMG_BASE + 'Food/Crabstick Katsu.webp';
-          if (n.includes('spamsilog')) return IMG_BASE + 'Food/Spamsilog.webp';
-          if (n.includes('hungarian')) return IMG_BASE + 'Food/Hungarian Silog.webp';
-          if (n.includes('tocilog')) return IMG_BASE + 'Food/Tocilog.webp';
-          if (n.includes('tapsilog')) return IMG_BASE + 'Food/Tapsilog.webp';
-          if (n.includes('sausilog')) return IMG_BASE + 'Food/Sausilog.webp';
-          if (n.includes('bacsilog')) return IMG_BASE + 'Food/Bacsilog.webp';
+          if (n.includes('chicken poppers'))  return IMG_BASE + 'Food/Chicken Poppers.webp';
+          if (n.includes('chicken fingers'))  return IMG_BASE + 'Food/Chicken Fingers.webp';
+          if (n.includes('crabstick'))        return IMG_BASE + 'Food/Crabstick Katsu.webp';
+          if (n.includes('spamsilog'))        return IMG_BASE + 'Food/Spamsilog.webp';
+          if (n.includes('hungarian') || n.includes('hungariansilog')) return IMG_BASE + 'Food/Hungarian Silog.webp';
+          if (n.includes('tocilog'))          return IMG_BASE + 'Food/Tocilog.webp';
+          if (n.includes('tapsilog'))         return IMG_BASE + 'Food/Tapsilog.webp';
+          if (n.includes('sausilog'))         return IMG_BASE + 'Food/Sausilog.webp';
+          if (n.includes('bacsilog'))         return IMG_BASE + 'Food/Bacsilog.webp';
+          if (n === 'egg')                    return IMG_BASE + 'Food/Egg.webp';
+          if (n === 'rice')                   return IMG_BASE + 'Food/Rice.webp';
           return IMG_BASE + 'Food/Chicken Tonkatsu.webp';
         }
+
         return IMG_BASE + 'Cold Brew Coffee/Americano.webp';
       }
 

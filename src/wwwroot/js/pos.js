@@ -260,7 +260,7 @@ window.Views = window.Views || {};
     cart.forEach((l) => {
       const row = el('div', { class: 'cart-line' },
         el('div', { class: 'cart-line-thumb' },
-          el('img', { src: l.img || IMG_BASE + 'latte.webp', alt: l.name })),
+          el('img', { src: l.img || IMG_BASE + 'Cold Brew Coffee/Americano.webp', alt: l.name })),
         el('div', { class: 'cart-line-body' },
           el('div', { class: 'cart-line-top' },
             el('div', { class: 'item-name', text: l.name }),
