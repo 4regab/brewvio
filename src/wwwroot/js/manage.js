@@ -469,11 +469,11 @@ window.Views = window.Views || {};
         storeName: el('input', { class: 'form-control', value: s.storeName }),
         address: el('input', { class: 'form-control', value: s.address }),
         currency: el('input', { class: 'form-control', value: s.currency }),
-        taxRatePercent: el('input', { class: 'form-control', type: 'number', step: '0.01', min: '0', value: s.taxRatePercent }),
       };
       const save = button('Save settings', 'btn-primary', async () => {
         try {
-          const dto = { storeName: f.storeName.value.trim(), address: f.address.value.trim(), currency: f.currency.value.trim() || 'PHP', taxRatePercent: Number(f.taxRatePercent.value) || 0 };
+          // Tax rate is no longer configurable in the UI; preserve the stored value on save.
+          const dto = { storeName: f.storeName.value.trim(), address: f.address.value.trim(), currency: f.currency.value.trim() || 'PHP', taxRatePercent: Number(s.taxRatePercent) || 0 };
           await Api.put('/api/settings', dto);
           window.App.store = { storeName: dto.storeName, address: dto.address, currency: dto.currency, taxRatePercent: dto.taxRatePercent };
           UI.setCurrency(dto.currency);
@@ -487,9 +487,7 @@ window.Views = window.Views || {};
           el('h2', { class: 'h5 mb-3', text: 'Store settings' }),
           el('div', { class: 'mb-3' }, el('label', { class: 'form-label', text: 'Store name' }), f.storeName),
           el('div', { class: 'mb-3' }, el('label', { class: 'form-label', text: 'Address' }), f.address),
-          el('div', { class: 'row g-2 mb-3' },
-            el('div', { class: 'col-6' }, el('label', { class: 'form-label', text: 'Currency' }), f.currency),
-            el('div', { class: 'col-6' }, el('label', { class: 'form-label', text: 'Tax rate (%)' }), f.taxRatePercent)),
+          el('div', { class: 'mb-3' }, el('label', { class: 'form-label', text: 'Currency' }), f.currency),
           save)),
         el('div', { class: 'col-lg-5' }, el('div', { class: 'section-card p-4' },
           el('h2', { class: 'h5 mb-3', text: 'Data backup' }),
