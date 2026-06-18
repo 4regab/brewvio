@@ -10,7 +10,7 @@ namespace Brewvio.Controllers;
 // POS endpoints — available to any authenticated user (cashier or manager).
 [ApiController]
 [Route("api/orders")]
-public class OrdersController(OrderService orders, SettingsService settings) : ControllerBase
+public class OrdersController(OrderService orders) : ControllerBase
 {
     [HttpPost]
     public async Task<IActionResult> Create(CreateOrderRequest req, CancellationToken ct) => Ok(await orders.CreateAsync(req, ct));
@@ -31,16 +31,6 @@ public class OrdersController(OrderService orders, SettingsService settings) : C
 
     [HttpGet("{id:int}")]
     public async Task<IActionResult> Get(int id, CancellationToken ct) => await orders.GetReceiptAsync(id, ct) is { } r ? Ok(r) : NotFound();
-
-    [HttpGet("{id:int}/pdf")]
-    public async Task<IActionResult> Pdf(int id, CancellationToken ct)
-    {
-        var r = await orders.GetReceiptAsync(id, ct);
-        if (r is null) return NotFound();
-        var store = await settings.GetAsync(ct);
-        var pdf = ExportHelper.ReceiptPdf(r, store.StoreName, store.Address, store.Currency);
-        return File(pdf, "application/pdf", $"receipt_{id}.pdf");
-    }
 
     [HttpPost("{id:int}/refund")]
     public async Task<IActionResult> Refund(int id, RefundRequest req, CancellationToken ct) =>

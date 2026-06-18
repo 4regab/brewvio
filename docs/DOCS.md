@@ -440,14 +440,6 @@ Returns the most recent `take` transactions, optionally filtered to those on or 
 
 ---
 
-#### `GET /api/orders/{id}/pdf`
-
-Returns a PDF receipt for the given transaction.
-
-**Response `200`** — `application/pdf`
-
----
-
 #### `POST /api/orders/{id}/refund`
 
 Marks a `Completed` transaction as `Refunded` and restocks ingredients.

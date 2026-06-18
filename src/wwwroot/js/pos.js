@@ -403,14 +403,10 @@ window.Views = window.Views || {};
 
   function showReceipt(r, isNew) {
     const orderId = r.id || r.transactionId;
-    const pdfBtn = button('<i class="bi bi-file-earmark-pdf"></i> Save PDF', 'btn-primary', async () => {
-      try { await Api.download(`/api/orders/${orderId}/pdf`, `receipt_${orderId}.pdf`); }
-      catch (e) { toast(e.message, 'danger'); }
-    });
 
     let footerBtns;
     if (isNew) {
-      footerBtns = [pdfBtn];
+      footerBtns = [];
     } else {
       const refundBtn = r.status === 'Completed'
         ? button('<i class="bi bi-arrow-counterclockwise"></i> Refund', 'btn-outline-danger', async () => {
@@ -425,7 +421,7 @@ window.Views = window.Views || {};
           })
         : null;
 
-      footerBtns = [refundBtn, pdfBtn].filter(Boolean);
+      footerBtns = [refundBtn].filter(Boolean);
     }
 
     modal({
