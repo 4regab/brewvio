@@ -1,0 +1,252 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: 'Brewvio - C# ASP.NET Core Web API on Lambda behind an API Gateway HTTP
+  API, a static frontend on S3, and a single CloudFront distribution fronting both.
+  Database is Supabase Postgres (reached over SSL via the DATABASE_URL).
+
+  '
+Parameters:
+  SsmParameterPath:
+    Type: String
+    Default: /brewvio
+    Description: 'SSM Parameter Store path prefix holding the app secrets. Create
+      <path>/DATABASE_URL and <path>/JWT_KEY as SecureString parameters out-of-band
+      (CloudFormation cannot create SecureString parameters).
+
+      '
+Globals:
+  Function:
+    Runtime: dotnet10
+    Architectures:
+    - arm64
+    MemorySize: 1769  # 1769 MB = 2 vCPUs allocated; faster JIT on cold start vs 1024 MB (1 vCPU)
+    Timeout: 60
+Resources:
+  Api:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      DefaultRouteSettings:
+        ThrottlingBurstLimit: 50
+        ThrottlingRateLimit: 100
+  BrewvioFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: ${AWS::StackName}-api
+      # CodeUri is resolved by Amazon.Lambda.Tools relative to THIS template's
+      # directory (infra/), not the working directory. The project lives at the
+      # repo-root src/, so go up one level.
+      CodeUri: ../src
+      Handler: Brewvio
+      Environment:
+        Variables:
+          SSM_PARAMETER_PATH:
+            Ref: SsmParameterPath
+      Policies:
+      - Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Action:
+          - ssm:GetParametersByPath
+          - ssm:GetParameters
+          - ssm:GetParameter
+          Resource:
+          - Fn::Sub: arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter${SsmParameterPath}
+          - Fn::Sub: arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter${SsmParameterPath}/*
+        - Effect: Allow
+          Action: kms:Decrypt
+          # Scoped to the AWS-managed SSM key for this account/region — not wildcard.
+          Resource: arn:aws:kms:ap-southeast-2:626216981301:key/1440e01c-7327-46b0-8c6c-871bacccaa9e
+          Condition:
+            StringEquals:
+              kms:ViaService:
+                Fn::Sub: ssm.${AWS::Region}.amazonaws.com
+      Events:
+        Root:
+          Type: HttpApi
+          Properties:
+            ApiId:
+              Ref: Api
+            Path: /
+            Method: ANY
+        Proxy:
+          Type: HttpApi
+          Properties:
+            ApiId:
+              Ref: Api
+            Path: /{proxy+}
+            Method: ANY
+      # Cap concurrency so a bug or traffic spike can't exhaust the account-wide Lambda
+      # concurrency pool (default 1000). 10 is well above the 1-2 concurrent users this
+      # internal tool will ever see; raise if you add background jobs or other functions.
+      ReservedConcurrentExecutions: 10
+    Metadata:
+      SamResourceId: BrewvioFunction
+  BrewvioFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName:
+        Fn::Sub: /aws/lambda/${AWS::StackName}-api
+      RetentionInDays: 90  # 90 days; well within CloudWatch free tier at this usage level
+  FrontendBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+        - Id: expire-noncurrent-versions
+          Status: Enabled
+          NoncurrentVersionExpiration:
+            NoncurrentDays: 30
+          AbortIncompleteMultipartUpload:
+            DaysAfterInitiation: 7
+  FrontendOac:
+    Type: AWS::CloudFront::OriginAccessControl
+    Properties:
+      OriginAccessControlConfig:
+        Name:
+          Fn::Sub: ${AWS::StackName}-frontend-oac
+        OriginAccessControlOriginType: s3
+        SigningBehavior: always
+        SigningProtocol: sigv4
+  # Custom response-headers policy. Enforces HSTS, X-Frame-Options DENY, X-Content-Type-Options,
+  # Referrer-Policy and X-XSS-Protection (same coverage as the old AWS-managed policy) and adds a
+  # strict Permissions-Policy plus an enforced Content-Security-Policy. CSP sources are scoped to
+  # exactly what the frontend loads: jsDelivr (Bootstrap + Chart.js), Google Fonts, a data: favicon,
+  # and the same-origin /api. The deployment role needs cloudfront:*ResponseHeadersPolicy permissions.
+  SecurityHeadersPolicy:
+    Type: AWS::CloudFront::ResponseHeadersPolicy
+    Properties:
+      ResponseHeadersPolicyConfig:
+        Name:
+          Fn::Sub: ${AWS::StackName}-security-headers
+        Comment: HSTS, anti-clickjacking, nosniff, referrer, Permissions-Policy, and enforced CSP.
+        SecurityHeadersConfig:
+          StrictTransportSecurity:
+            Override: true
+            IncludeSubdomains: true
+            Preload: true
+            AccessControlMaxAgeSec: 31536000
+          ContentTypeOptions:
+            Override: true
+          FrameOptions:
+            Override: true
+            FrameOption: DENY
+          ReferrerPolicy:
+            Override: true
+            ReferrerPolicy: strict-origin-when-cross-origin
+          XSSProtection:
+            Override: true
+            Protection: true
+            ModeBlock: true
+          # ContentSecurityPolicy is a first-class SecurityHeadersConfig field — NOT a
+          # custom header. Putting it in CustomHeadersConfig causes an InvalidRequest
+          # error because CloudFront rejects semicolons/quotes in custom header values.
+          ContentSecurityPolicy:
+            Override: true
+            ContentSecurityPolicy: "default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com https://cdn.jsdelivr.net; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'; upgrade-insecure-requests"
+        # Permissions-Policy has no first-class CloudFront field, so it goes here.
+        CustomHeadersConfig:
+          Items:
+          - Header: Permissions-Policy
+            Override: true
+            Value: "accelerometer=(), autoplay=(), camera=(), display-capture=(), encrypted-media=(), fullscreen=(self), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), midi=(), payment=(), usb=(), browsing-topics=()"
+  Distribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Aliases:
+          - chaobrew.xyz
+        ViewerCertificate:
+          AcmCertificateArn: arn:aws:acm:us-east-1:626216981301:certificate/f0e968eb-628e-4497-a4a2-f0d1b3743fce
+          SslSupportMethod: sni-only
+          MinimumProtocolVersion: TLSv1.2_2021
+        Enabled: true
+        DefaultRootObject: index.html
+        Origins:
+        - Id: s3-frontend
+          DomainName:
+            Fn::GetAtt:
+            - FrontendBucket
+            - RegionalDomainName
+          OriginAccessControlId:
+            Ref: FrontendOac
+          S3OriginConfig:
+            OriginAccessIdentity: ''
+        - Id: api
+          DomainName:
+            Fn::Sub: ${Api}.execute-api.${AWS::Region}.amazonaws.com
+          CustomOriginConfig:
+            OriginProtocolPolicy: https-only
+          # Origin lock: CloudFront injects this shared secret on every request to the API
+          # origin. The Lambda rejects any request whose X-Origin-Verify header is missing or
+          # wrong (i.e. requests sent straight to the public API Gateway URL), forcing all
+          # traffic through CloudFront. The value is read from the SSM String parameter
+          # ${SsmParameterPath}/ORIGIN_VERIFY at deploy time. It must be a plaintext String (not
+          # SecureString) because CloudFront does not support the ssm-secure dynamic reference.
+          OriginCustomHeaders:
+          - HeaderName: X-Origin-Verify
+            HeaderValue:
+              Fn::Sub: '{{resolve:ssm:${SsmParameterPath}/ORIGIN_VERIFY}}'
+        DefaultCacheBehavior:
+          TargetOriginId: s3-frontend
+          ViewerProtocolPolicy: redirect-to-https
+          AllowedMethods:
+          - GET
+          - HEAD
+          - OPTIONS
+          CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6
+          ResponseHeadersPolicyId:
+            Ref: SecurityHeadersPolicy
+        CacheBehaviors:
+        - PathPattern: /api/*
+          TargetOriginId: api
+          ViewerProtocolPolicy: redirect-to-https
+          AllowedMethods:
+          - GET
+          - HEAD
+          - OPTIONS
+          - PUT
+          - POST
+          - PATCH
+          - DELETE
+          CachePolicyId: 4135ea2d-6df8-44a3-9df3-4b5a84be39ad
+          OriginRequestPolicyId: b689b0a8-53d0-40ab-baf2-68738e2966ac
+          ResponseHeadersPolicyId:
+            Ref: SecurityHeadersPolicy
+  FrontendBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket:
+        Ref: FrontendBucket
+      PolicyDocument:
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: cloudfront.amazonaws.com
+          Action: s3:GetObject
+          Resource:
+            Fn::Sub: ${FrontendBucket.Arn}/*
+          Condition:
+            StringEquals:
+              AWS:SourceArn:
+                Fn::Sub: arn:aws:cloudfront::${AWS::AccountId}:distribution/${Distribution}
+Outputs:
+  SiteUrl:
+    Description: Public URL (frontend + /api on one domain)
+    Value:
+      Fn::Sub: https://${Distribution.DomainName}
+  FrontendBucketName:
+    Description: Upload wwwroot/ contents here, then invalidate CloudFront
+    Value:
+      Ref: FrontendBucket
+  ApiEndpoint:
+    Description: Direct API Gateway endpoint (bypasses CloudFront)
+    Value:
+      Fn::Sub: https://${Api}.execute-api.${AWS::Region}.amazonaws.com

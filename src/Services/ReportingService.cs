@@ -1,0 +1,131 @@
+using System.Globalization;
+using Brewvio.Data;
+using Brewvio.Dtos;
+using Microsoft.EntityFrameworkCore;
+
+namespace Brewvio.Services;
+
+// Reporting Engine — aggregates sales metrics, a revenue trend bucketed by period
+// (daily/weekly/monthly/yearly), and menu profitability for a date range. Aggregation is
+// done in memory after targeted queries (provider-agnostic).
+public class ReportingService(BrewvioDbContext db)
+{
+    // Builds the sales report for a date range: summary metrics, revenue trend, menu performance,
+    // best/slow sellers, and category breakdown.
+    // fromUtc: inclusive start of the range (UTC).
+    // toUtc: exclusive end of the range (UTC).
+    // period: trend bucket size — daily, weekly, monthly, or yearly.
+    // ct: cancellation token.
+    // returns: the assembled report DTO.
+    public async Task<ReportDto> GenerateAsync(DateTime fromUtc, DateTime toUtc, string period = "daily",
+        CancellationToken ct = default)
+    {
+        period = (period ?? "daily").Trim().ToLowerInvariant();
+
+        var txns = await db.Transactions
+            .Where(t => t.Status == "Completed" && t.Timestamp >= fromUtc && t.Timestamp < toUtc)
+            .Select(t => new { t.Timestamp, t.DiscountAmount, t.TaxAmount, t.TotalAmount })
+            .ToListAsync(ct);
+
+        var items = await db.TransactionItems
+            .Where(ti => ti.Transaction.Status == "Completed"
+                && ti.Transaction.Timestamp >= fromUtc && ti.Transaction.Timestamp < toUtc)
+            .Select(ti => new { ti.MenuItemId, ti.ItemName, ti.Quantity, ti.LineTotal })
+            .ToListAsync(ct);
+
+        // Only the menu items actually sold in this range are needed for category lookup and
+        // costing — scope both queries to those ids instead of scanning every menu item / recipe.
+        var menuIdsInRange = items.Select(i => i.MenuItemId).Distinct().ToList();
+
+        var category = await db.MenuItems.AsNoTracking()
+            .Where(m => menuIdsInRange.Contains(m.Id))
+            .ToDictionaryAsync(m => m.Id, m => m.Category, ct);
+
+        // Cost per menu item = sum(ingredient.CostPerUnit * recipe.Quantity). EF can't translate
+        // this grouped aggregate to SQL, so it evaluates the Sum in memory — which means the
+        // Ingredient navigation MUST be eagerly loaded (.Include), otherwise r.Ingredient is null
+        // on a fresh per-request context and the Sum throws NullReferenceException. (The Include is
+        // NOT dead: it's only "ignored" when a query translates to SQL, which this one does not.)
+        var recipeCosts = await db.RecipeIngredients
+            .Where(r => menuIdsInRange.Contains(r.MenuItemId))
+            .Include(r => r.Ingredient)
+            .GroupBy(r => r.MenuItemId)
+            .ToDictionaryAsync(
+                g => g.Key,
+                g => g.Sum(r => r.Quantity * r.Ingredient.CostPerUnit), ct);
+
+        var totalSales    = txns.Sum(t => t.TotalAmount);
+        var totalTax      = txns.Sum(t => t.TaxAmount);
+        var totalDiscounts = txns.Sum(t => t.DiscountAmount);
+        var count         = txns.Count;
+        var itemsSold     = items.Sum(i => i.Quantity);
+        var aov           = count == 0 ? 0 : Math.Round(totalSales / count, 2);
+
+        // Overall profit margin
+        var totalCost = items.Sum(i => recipeCosts.GetValueOrDefault(i.MenuItemId, 0m) * i.Quantity);
+        var totalProfit = totalSales - totalCost;
+        var profitMarginPct = totalSales == 0 ? 0m : Math.Round(totalProfit / totalSales * 100m, 2);
+
+        // "Sales today" is a fixed snapshot independent of the selected range/period, so it gets its
+        // own cheap aggregate query. ponytail: uses the UTC calendar day to match the app-wide
+        // UTC-day convention in ReportsController.Range; upgrade path = store-timezone offset everywhere.
+        var todayStart = DateTime.SpecifyKind(DateTime.UtcNow.Date, DateTimeKind.Utc);
+        var todayEnd = todayStart.AddDays(1);
+        var salesToday = await db.Transactions
+            .Where(t => t.Status == "Completed" && t.Timestamp >= todayStart && t.Timestamp < todayEnd)
+            .SumAsync(t => (decimal?)t.TotalAmount, ct) ?? 0m;
+
+        var summary = new SalesSummaryDto(totalSales, count, aov, totalDiscounts, totalTax, itemsSold, profitMarginPct, salesToday);
+
+        // Revenue trend bucketed by the requested period.
+        var trend = txns
+            .GroupBy(t => BucketKey(t.Timestamp, period))
+            .OrderBy(g => g.Key.Sort)
+            .Select(g => new SalesTrendPointDto(g.Key.Label, g.Sum(x => x.TotalAmount), g.Count()))
+            .ToList();
+
+        var performance = items.GroupBy(i => new { i.MenuItemId, i.ItemName })
+            .Select(g =>
+            {
+                var qty     = g.Sum(x => x.Quantity);
+                var revenue = g.Sum(x => x.LineTotal);
+                var cost    = recipeCosts.GetValueOrDefault(g.Key.MenuItemId, 0m) * qty;
+                var profit  = Math.Round(revenue - cost, 2);
+                var margin  = revenue == 0 ? 0m : Math.Round(profit / revenue * 100m, 2);
+                return new MenuPerformanceDto(g.Key.MenuItemId, g.Key.ItemName,
+                    category.GetValueOrDefault(g.Key.MenuItemId, ""), qty, revenue, profit, margin);
+            })
+            .OrderByDescending(p => p.QuantitySold).ToList();
+
+        var bestSellers = performance.Take(5).ToList();
+        var slowSellers = performance.OrderBy(p => p.QuantitySold).Take(5).ToList();
+
+        var categoryBreakdown = performance
+            .GroupBy(p => string.IsNullOrEmpty(p.Category) ? "Uncategorized" : p.Category)
+            .Select(g => new CategorySalesDto(g.Key, g.Sum(p => p.QuantitySold), g.Sum(p => p.Revenue)))
+            .OrderByDescending(c => c.Revenue).ToList();
+
+        return new ReportDto(period, summary, trend, performance, bestSellers, slowSellers, categoryBreakdown);
+    }
+
+    // Maps a timestamp to a trend bucket (label + sortable key) for the requested period.
+    private static (string Label, string Sort) BucketKey(DateTime ts, string period)
+    {
+        var d = ts.Date;
+        switch (period)
+        {
+            case "weekly":
+                var week  = ISOWeek.GetWeekOfYear(d);
+                var year  = ISOWeek.GetYear(d);
+                var weekStart = ISOWeek.ToDateTime(year, week, DayOfWeek.Monday);
+                return (weekStart.ToString("MMM dd"), $"{year}{week:00}");
+            case "monthly":
+                return (d.ToString("yyyy-MM"), d.ToString("yyyyMM"));
+            case "yearly":
+                return (d.ToString("yyyy"), d.ToString("yyyy"));
+            case "daily":
+            default:
+                return (d.ToString("MMM dd"), d.ToString("yyyyMMdd"));
+        }
+    }
+}

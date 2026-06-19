@@ -1,0 +1,125 @@
+name: Test & Deploy
+
+on:
+  workflow_dispatch:        # allow manual deploys (e.g. after a history rewrite that skips the push event)
+  push:
+    branches: [master]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+  pull_request:
+    branches: [master]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+
+env:
+  AWS_REGION: ap-southeast-2
+  STACK_NAME: brewvio
+  S3_DEPLOY_BUCKET: aws-sam-cli-managed-default-samclisourcebucket-xczut1dcayng
+  DOTNET_VERSION: "10.0.x"
+
+jobs:
+  # ── 1. Run tests ──────────────────────────────────────────────────────────────
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: brewvio
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      BREWVIO_TEST_PG: "Host=localhost;Port=5433;Username=postgres;Password=postgres"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET ${{ env.DOTNET_VERSION }}
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Restore dependencies
+        run: dotnet restore
+
+      - name: Build
+        run: dotnet build --no-restore --configuration Release
+
+      - name: Run tests
+        run: dotnet test tests/ --no-build --configuration Release --verbosity normal
+
+  # ── 2. Deploy (only on push to main, after tests pass) ───────────────────────
+  deploy:
+    name: Deploy to AWS
+    needs: test
+    runs-on: ubuntu-latest
+    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/master'
+
+    permissions:
+      id-token: write   # required for OIDC token exchange
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET ${{ env.DOTNET_VERSION }}
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      # Apply EF Core migrations to Supabase BEFORE deploying new code, so the
+      # schema is ready when the new Lambda goes live. Uses the session pooler
+      # (port 5432) — migration advisory locks don't work on the transaction
+      # pooler (6543, PgBouncer transaction mode).
+      - name: Apply database migrations
+        run: |
+          dotnet restore
+          dotnet tool install -g dotnet-ef --version 10.0.8
+          dotnet ef database update --project src \
+            --connection "${{ secrets.MIGRATION_CONNECTION_STRING }}"
+
+      - name: Install Amazon Lambda Tools
+        run: dotnet tool install -g Amazon.Lambda.Tools
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      # Deploy Lambda + API Gateway + CloudFront infra via CloudFormation
+      - name: Deploy Lambda (dotnet lambda deploy-serverless)
+        run: |
+          dotnet lambda deploy-serverless \
+            --template infra/template.yaml \
+            --stack-name ${{ env.STACK_NAME }} \
+            --s3-bucket ${{ env.S3_DEPLOY_BUCKET }} \
+            --region ${{ env.AWS_REGION }}
+
+      # Sync static frontend — versioned assets get long-lived cache, index.html never cached
+      - name: Sync frontend to S3
+        run: |
+          aws s3 sync src/wwwroot/ s3://${{ secrets.FRONTEND_BUCKET }}/ \
+            --delete \
+            --cache-control "max-age=31536000, immutable" \
+            --exclude "index.html"
+
+          aws s3 cp src/wwwroot/index.html s3://${{ secrets.FRONTEND_BUCKET }}/index.html \
+            --cache-control "no-store, must-revalidate"
+
+      - name: Invalidate CloudFront cache
+        run: |
+          aws cloudfront create-invalidation \
+            --distribution-id ${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }} \
+            --paths "/*"

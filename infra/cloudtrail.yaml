@@ -1,0 +1,89 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  CloudTrail trail for Brewvio — records management-plane API calls (who deployed,
+  who read SSM params, IAM changes). Management events on the first trail per region
+  are free forever. Deploy once with:
+
+    aws cloudformation deploy \
+      --template-file infra/cloudtrail.yaml \
+      --stack-name brewvio-cloudtrail \
+      --capabilities CAPABILITY_IAM \
+      --region ap-southeast-2
+
+Parameters:
+  RetentionDays:
+    Type: Number
+    Default: 90
+    Description: Days to retain trail logs in S3 before expiry.
+
+Resources:
+  # S3 bucket that receives CloudTrail log files.
+  # Public access is fully blocked; log file validation is on so you can detect tampering.
+  TrailBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub brewvio-cloudtrail-logs-${AWS::AccountId}
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: expire-trail-logs
+            Status: Enabled
+            ExpirationInDays: !Ref RetentionDays
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 7
+
+  # CloudTrail requires a bucket policy that allows the service to check the bucket ACL
+  # and to write log files. The ArnLike condition scopes delivery to this account only.
+  TrailBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref TrailBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AclCheck
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: s3:GetBucketAcl
+            Resource: !GetAtt TrailBucket.Arn
+            Condition:
+              StringEquals:
+                AWS:SourceArn: !Sub arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/brewvio-trail
+          - Sid: DeliverLogs
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: s3:PutObject
+            Resource: !Sub ${TrailBucket.Arn}/AWSLogs/${AWS::AccountId}/*
+            Condition:
+              StringEquals:
+                s3:x-amz-acl: bucket-owner-full-control
+                AWS:SourceArn: !Sub arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/brewvio-trail
+
+  # Single-region trail. Records management events only (no data events = no cost).
+  # Management events = Lambda deploys, SSM reads, IAM changes, CloudFormation updates —
+  # exactly the operations you'd want to audit for this workload.
+  # EnableLogFileValidation lets you verify log integrity with the AWS CLI if needed.
+  BrewvioTrail:
+    Type: AWS::CloudTrail::Trail
+    DependsOn: TrailBucketPolicy   # bucket policy must exist before trail creation
+    Properties:
+      TrailName: brewvio-trail
+      IsLogging: true
+      S3BucketName: !Ref TrailBucket
+      EnableLogFileValidation: true
+      IncludeGlobalServiceEvents: true   # captures IAM events (global service)
+      IsMultiRegionTrail: false           # single region keeps it simple and free
+
+Outputs:
+  TrailArn:
+    Description: ARN of the CloudTrail trail
+    Value: !GetAtt BrewvioTrail.Arn
+  TrailBucketName:
+    Description: S3 bucket receiving trail log files
+    Value: !Ref TrailBucket
