@@ -19,7 +19,7 @@ Globals:
     Runtime: dotnet10
     Architectures:
     - arm64
-    MemorySize: 1769  # 1769 MB = 2 vCPUs allocated; faster JIT on cold start vs 1024 MB (1 vCPU)
+    MemorySize: 1769  # 1769 MB = 1 full vCPU allocated (the threshold for a whole vCPU); faster JIT on cold start vs 1024 MB
     Timeout: 60
 Resources:
   Api:

@@ -157,7 +157,7 @@ CloudFront Distribution (d37i8pbdtw6xf4.cloudfront.net)
   └── /*      → S3 Bucket (static frontend — index.html + JS/CSS/img)
 ```
 
-- **Lambda** runs the entire ASP.NET Core app via `Amazon.Lambda.AspNetCoreServer.Hosting`. Cold starts are ~1–3 s on arm64 / 1769 MB (2 vCPUs allocated). Concurrency is capped at 10 (`ReservedConcurrentExecutions`) so a spike can't exhaust the account-wide Lambda pool.
+- **Lambda** runs the entire ASP.NET Core app via `Amazon.Lambda.AspNetCoreServer.Hosting`. Cold starts are ~1–3 s on arm64 / 1769 MB (one full vCPU — the memory threshold at which Lambda allocates a whole vCPU). Concurrency is capped at 10 (`ReservedConcurrentExecutions`) so a spike can't exhaust the account-wide Lambda pool.
 - **Supabase** provides managed Postgres. The app connects through the **Supavisor transaction pooler** (port 6543) with `MaxAutoPrepare=0` and client-side connection pooling disabled (connections go stale in frozen Lambda processes).
 - **Optimistic concurrency** on `Ingredient.StockLevel` uses PostgreSQL's `xmin` system column so concurrent orders can't silently oversell stock.
 - **Secrets** (`DATABASE_URL`, `JWT_KEY`) are stored in **AWS SSM Parameter Store** as SecureString and loaded at Lambda cold-start via `Amazon.Extensions.Configuration.SystemsManager`.
@@ -1269,7 +1269,7 @@ Defined in `infra/template.yaml` (AWS SAM):
 
 | Resource | Type | Notes |
 |---|---|---|
-| `BrewvioFunction` | `AWS::Serverless::Function` | arm64, .NET 10, 1769 MB (2 vCPUs), 60s timeout, `ReservedConcurrentExecutions: 10` |
+| `BrewvioFunction` | `AWS::Serverless::Function` | arm64, .NET 10, 1769 MB (1 full vCPU), 60s timeout, `ReservedConcurrentExecutions: 10` |
 | `Api` | `AWS::Serverless::HttpApi` | Throttle: 50 burst / 100 rps |
 | `BrewvioFunctionLogGroup` | `AWS::Logs::LogGroup` | Lambda log group; 90-day retention (within CloudWatch free tier at this usage) |
 | `FrontendBucket` | `AWS::S3::Bucket` | Private; CloudFront OAC access only; versioned with lifecycle cleanup |
